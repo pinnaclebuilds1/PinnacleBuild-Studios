@@ -10,3 +10,6 @@ Public website source for PinnacleBuild-Studios.
 4. GitHub will provide the public site URL in the Pages section.
 
 The homepage is `index.html`. The site is static; any commission form or studio-manager features that depend on a separate Google Apps Script backend must have that backend URL configured to work when hosted here.
+
+
+GitHub Pages is configured by the repository's Actions workflow, which enables Pages on its first deployment.

@@ -563,6 +563,19 @@ textarea{line-height:1.65}
 @media(max-width:1100px){.mail-layout{grid-template-columns:180px minmax(260px,340px) minmax(0,1fr);gap:10px}.mail-layout .pane-top{display:grid}.mail-layout .pane-top .btns{justify-content:flex-start}}
 @media(max-width:850px){.mail-layout{grid-template-columns:1fr}.mail-sidebar{min-height:0;display:flex;flex-wrap:wrap;align-items:center}.mail-brand{width:100%;padding-bottom:4px}.mail-note{display:none}.mail-list{min-height:0}.mail-rows{max-height:420px;min-height:120px}.mail-detail>.pane{min-height:0}.mail-layout.has-sel .mail-list{display:none}.mail-layout:not(.has-sel) .mail-detail{display:none}.mail-layout .back{display:inline-flex}}
 
+
+/* Public, read-only completed commission showcase */
+.public-mail-layout .mail-sidebar{background:#14251a}
+.public-mail-layout .mail-sidebar button[aria-current=true]{background:#25452f;color:#dfffce}
+.public-mrow{width:100%;text-align:left;border:0;border-bottom:1px solid #e3e6df;background:#fff;display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:10px;align-items:start;cursor:pointer;color:var(--ink)}
+.public-mrow:hover,.public-mrow[aria-current=true]{background:#f0f6eb}
+.public-mrow .snip{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:normal}
+.public-commission-detail .pane-top{align-items:flex-start}
+.public-lock{display:inline-flex;align-items:center;gap:7px;background:#e8f1e3;color:#315b37;border:1px solid #c8d9c0;border-radius:5px;padding:8px 10px;font-size:12px;font-weight:700;white-space:nowrap}
+.public-idea{white-space:pre-wrap;overflow-wrap:anywhere}
+.public-status{padding:10px 14px;color:#68746a;font-size:11px;border-top:1px solid #e3e6df}
+@media(max-width:850px){.public-mail-layout .mail-sidebar{display:flex}.public-mail-layout .mail-sidebar .mail-brand{width:100%}}
+
 </style>
 </head>
 <body>
@@ -894,7 +907,7 @@ async function loadSite(){
 /* =========================================================
    STUDIO MANAGER (password protected; changes save to your Google Sheet)
    ========================================================= */
-const M = {token:null, demo:false, tab:'inbox', comms:[], sel:null, filter:'active', q:'', mailFolder:'inbox', mailQ:'', edit:null, ownerEmail:''};
+const M = {token:null, demo:false, tab:'inbox', comms:[], sel:null, filter:'active', q:'', mailFolder:'inbox', mailQ:'', publicComms:[], publicSel:null, publicLoaded:false, publicLoading:false, publicError:'', edit:null, ownerEmail:''};
 try { M.token = sessionStorage.getItem('pb_token'); } catch {}
 const SAMPLE = () => [
  {id:'PB-1003', received:new Date(Date.now() - 36e5).toISOString(), status:'New', name:'Sample: Alex', gmail:'alex.sample@gmail.com', discord:'alex_builds', type:'Creature or dragon', platform:'Xbox', size:'About 60 blocks long', budget:'$30', deadline:'', idea:'A Night Fury perched on a cliff, wings half open. (This is sample data so you can try the manager.)', refs:'', quote:'', notes:'', read:false, archived:false, thread:[]},
@@ -1014,35 +1027,47 @@ function renderCommissionSurface(){
  if (HASH === 'commission-list') renderCommissionList();
  else renderTab();
 }
+function publicCommissionPane(c){
+ const facts = [['Build type',c.type],['Platform',c.platform],['Size',c.size],['Budget',c.budget],['Deadline',c.deadline && niceDate(c.deadline)],['Completed',c.received && niceDate(c.received)]].filter(x=>x[1]);
+ const refs = String(c.refs || '').split(/\\s+/).filter(Boolean);
+ return `<div class="pane public-commission-detail"><div class="pane-top"><div><p class="label">Completed commission</p><h3>${esc(c.type || 'Minecraft build')}</h3><p class="sub">${esc(c.id)} · <span class="st" data-s="Done" style="margin:0">Done</span></p></div><span class="public-lock">${ic('eye')} Public showcase</span></div>
+  <div class="dgrid">${facts.map(([l,v])=>`<div><small>${l}</small><b>${esc(v)}</b></div>`).join('')}</div>
+  <p class="ph">Project details</p><div class="idea public-idea">${esc(c.idea || 'No project description was added.')}</div>
+  ${refs.length ? `<p class="ph">Reference links</p><div class="idea">${refs.map(x=>https(x)?`<a ${out(x)}>${esc(x)}</a>`:esc(x)).join('<br>')}</div>` : ''}
+ </div>`;
+}
 function viewCommissionList(){
- if (!M.token && !M.demo) return viewManager();
- const done = M.mailFolder === 'done', q = M.mailQ.toLowerCase();
- const visible = M.comms.filter(c => !c.archived && (done ? c.status === 'Done' : c.status !== 'Done'))
-  .filter(c => !q || [c.id,c.name,c.gmail,c.discord,c.type,c.idea].join(' ').toLowerCase().includes(q))
-  .sort((a,b) => new Date(b.received) - new Date(a.received));
- const c = M.comms.find(x => x.id === M.sel && !x.archived && (done ? x.status === 'Done' : x.status !== 'Done'));
- const inboxCount = M.comms.filter(x => !x.archived && x.status !== 'Done').length;
- const doneCount = M.comms.filter(x => !x.archived && x.status === 'Done').length;
- return `<section class="mail-top"><div class="wrap"><p class="label">Studio workspace</p><h1>Commission List<span>.</span></h1><p class="intro">Every request in one place. Open a request to read the full details, then move it to Done Commissions when the build is finished.</p></div></section>
- <section class="mail-area"><div class="mail-layout${c ? ' has-sel' : ''}">
-  <aside class="mail-sidebar">
-   <p class="mail-brand">YOUR COMMISSIONS</p>
-   <button type="button" data-mail-folder="inbox" aria-current="${!done}">${ic('inbox')} <span>Commissions</span><b>${inboxCount}</b></button>
-   <button type="button" data-mail-folder="done" aria-current="${done}">${ic('check-circle')} <span>Done Commissions</span><b>${doneCount}</b></button>
-   <div class="mail-note">Private studio page · Only visible after owner sign-in</div>
-  </aside>
-  <div class="mail-list box">
-   <div class="mail-list-head"><h2>${done ? 'Done Commissions' : 'Commissions'}</h2><button type="button" class="btn btn-plain btn-sm" id="refresh">${ic('refresh-cw')} Refresh</button></div>
-   <label class="msearch">${ic('search')}<input id="mail-q" type="search" placeholder="Search commissions" value="${esc(M.mailQ)}"></label>
-   <div class="mail-rows">${visible.length ? visible.map(x => `<button type="button" class="mrow${x.read ? '' : ' unread'}" data-sel="${esc(x.id)}" aria-current="${x.id === M.sel}"><span class="dot"></span><span><span class="nm">${esc(x.name)}</span><span class="snip">${esc(x.gmail)} · ${esc(x.type)} — ${esc(x.idea)}</span><span class="st" data-s="${esc(x.status)}">${esc(x.status)}</span></span><span class="when">${esc(shortDate(x.received))}<br>${esc(x.id)}</span></button>`).join('') : `<div class="mail-empty"><b>${done ? 'No completed commissions yet' : 'Your inbox is clear'}</b><p>${done ? 'When you finish a request, open it and click “Mark as done”.' : 'New customer requests will appear here automatically.'}</p></div>`}</div>
+ const q = M.mailQ.toLowerCase();
+ const visible = M.publicComms.filter(c => !q || [c.id,c.type,c.platform,c.size,c.budget,c.deadline,c.idea].join(' ').toLowerCase().includes(q));
+ const c = M.publicComms.find(x => x.id === M.publicSel);
+ const statusText = M.publicLoading ? 'Loading completed commissions…' : M.publicError ? M.publicError : 'Only completed projects are shown here. This page is public and read-only.';
+ return `<section class="mail-top"><div class="wrap"><p class="label">Pinnacle Builds portfolio</p><h1>Commission List<span>.</span></h1><p class="intro">Explore completed commissions and open any project to see its details.</p></div></section>
+ <section class="mail-area"><div class="mail-layout public-mail-layout${c ? ' has-sel' : ''}">
+  <aside class="mail-sidebar"><p class="mail-brand">PUBLIC SHOWCASE</p><button type="button" aria-current="true">${ic('check-circle')} <span>Done Commissions</span><b>${M.publicComms.length}</b></button><div class="mail-note">Anyone can view this page. Editing and manager tools are not available here.</div></aside>
+  <div class="mail-list box"><div class="mail-list-head"><h2>Done Commissions</h2><button type="button" class="btn btn-plain btn-sm" id="public-refresh">${ic('refresh-cw')} Refresh</button></div>
+   <label class="msearch">${ic('search')}<input id="mail-q" type="search" placeholder="Search completed projects" value="${esc(M.mailQ)}"></label>
+   <div class="mail-rows">${visible.length ? visible.map(x=>`<button type="button" class="mrow public-mrow${x.id===M.publicSel?' selected':''}" data-public-sel="${esc(x.id)}" aria-current="${x.id===M.publicSel}"><span class="dot"></span><span><span class="nm">${esc(x.type || 'Minecraft build')}</span><span class="snip">${esc(x.idea || 'Completed commission')} </span><span class="st" data-s="Done">Done</span></span><span class="when">${esc(shortDate(x.received))}<br>${esc(x.id)}</span></button>`).join('') : `<div class="mail-empty"><b>${M.publicLoading?'Loading…':M.publicError?'Could not load commissions':'No completed commissions yet'}</b><p>${M.publicError?esc(M.publicError):M.publicLoading?'Getting the public project list.': 'Completed projects will appear here once they are marked done in the private manager.'}</p></div>`}</div>
+   <p class="public-status">${esc(statusText)}</p>
   </div>
-  <div class="mail-detail">${c ? paneCommission(c) : `<div class="pane mail-placeholder"><div class="mail-placeholder-icon">${ic('inbox')}</div><h3>Select a commission</h3><p>Choose a request from the list to read the complete submission, contact details, references, and notes.</p></div>`}</div>
+  <div class="mail-detail">${c ? publicCommissionPane(c) : `<div class="pane mail-placeholder"><div class="mail-placeholder-icon">${ic('check-circle')}</div><h3>Explore completed work</h3><p>Select a completed commission to read its project details. Customer contact information and private manager notes are never displayed.</p></div>`}</div>
  </div></section>`;
 }
 function renderCommissionList(){
  const el = $('#main'); if (!el) return;
  el.innerHTML = viewCommissionList();
  fixIcons();
+ if (!M.publicLoaded && !M.publicLoading) loadPublicCommissions();
+}
+async function loadPublicCommissions(){
+ if (!CONNECTED) { M.publicError = 'The public commission feed is not connected yet.'; renderCommissionList(); return; }
+ M.publicLoading = true; M.publicError = ''; renderCommissionList();
+ try {
+  const r = await post({action:'publicCommissions'});
+  M.publicComms = Array.isArray(r.commissions) ? r.commissions : [];
+  M.publicLoaded = true; M.publicLoading = false;
+  if (!M.publicComms.some(c=>c.id===M.publicSel)) M.publicSel = null;
+ } catch(e) { M.publicLoading = false; M.publicError = e.message || 'Could not load completed commissions.'; }
+ renderCommissionList();
 }
 
 /* builds */
@@ -1151,6 +1176,8 @@ document.addEventListener('click', async e => {
  if (t.dataset.tab) { M.tab = t.dataset.tab; renderTab(); return; }
  if (t.dataset.mailFolder) { M.mailFolder = t.dataset.mailFolder; M.sel = null; renderCommissionList(); return; }
  if (t.dataset.filter) { M.filter = t.dataset.filter; renderTab(); return; }
+ if (t.id === 'public-refresh') { M.publicLoaded = false; M.publicError = ''; await loadPublicCommissions(); return; }
+ if (t.dataset.publicSel) { M.publicSel = t.dataset.publicSel; renderCommissionList(); return; }
  if (t.id === 'refresh') { await act('u-msg', () => call('commissions'), ''); return; }
  if (t.dataset.sel) { M.sel = t.dataset.sel; const c = M.comms.find(x => x.id === M.sel); renderCommissionSurface(); if (c && !c.read) { c.read = true; call('updateCommission', {id:c.id, read:true}).then(r => { if (r.commissions) M.comms = r.commissions; }).catch(() => {}); } return; }
  if (t.id === 'back') { M.sel = null; renderCommissionSurface(); return; }
@@ -1243,7 +1270,7 @@ function render(){
  if (view === 'vault') renderVaultGrid();
  if (view === 'home') afterHome();
  if (view === 'manager' && (M.token || M.demo)) renderTab();
- if (view === 'commission-list' && (M.token || M.demo)) renderCommissionList();
+ if (view === 'commission-list') renderCommissionList();
  $('footer').hidden = view === 'manager' && !!(M.token || M.demo);
  const navKey = view !== 'home' ? (view === 'build' ? 'vault' : view) : (['how','socials'].includes(h) ? h : 'home');
  $$('.nav a').forEach(a => a.toggleAttribute('aria-current', a.dataset.nav === navKey));

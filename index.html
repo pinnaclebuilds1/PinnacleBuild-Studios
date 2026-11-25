@@ -1029,7 +1029,7 @@ function renderCommissionSurface(){
 }
 function publicCommissionPane(c){
  const facts = [['Build type',c.type],['Platform',c.platform],['Size',c.size],['Budget',c.budget],['Deadline',c.deadline && niceDate(c.deadline)],['Completed',c.received && niceDate(c.received)]].filter(x=>x[1]);
- const refs = String(c.refs || '').split(/\\s+/).filter(Boolean);
+ const refs = String(c.refs || '').split(/\s+/).filter(Boolean);
  return `<div class="pane public-commission-detail"><div class="pane-top"><div><p class="label">Completed commission</p><h3>${esc(c.type || 'Minecraft build')}</h3><p class="sub">${esc(c.id)} · <span class="st" data-s="Done" style="margin:0">Done</span></p></div><span class="public-lock">${ic('eye')} Public showcase</span></div>
   <div class="dgrid">${facts.map(([l,v])=>`<div><small>${l}</small><b>${esc(v)}</b></div>`).join('')}</div>
   <p class="ph">Project details</p><div class="idea public-idea">${esc(c.idea || 'No project description was added.')}</div>

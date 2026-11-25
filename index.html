@@ -529,6 +529,40 @@ textarea{line-height:1.65}
  *,*::before,*::after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important}
 }
 
+
+/* Standalone commission inbox — Gmail-inspired, in Pinnacle Builds colors */
+.mail-top{background:#202722;color:#fff;padding:48px 0 42px}
+.mail-top h1{font-size:clamp(38px,5vw,62px);letter-spacing:-.06em}
+.mail-top h1 span{color:#b4c5a8}
+.mail-area{background:#f0f1eb;padding:24px max(18px,3vw) 56px;min-height:calc(100vh - 260px)}
+.mail-layout{width:min(1500px,100%);margin:auto;display:grid;grid-template-columns:220px minmax(300px,390px) minmax(0,1fr);gap:14px;align-items:start}
+.mail-sidebar{background:#202722;color:#e8eee7;border-radius:4px;padding:16px 10px;min-height:300px;display:grid;align-content:start;gap:7px}
+.mail-brand{padding:6px 10px 12px;color:#aeb9ae;font-size:10px;font-weight:800;letter-spacing:.14em}
+.mail-sidebar button{display:flex;align-items:center;gap:10px;width:100%;border:0;border-radius:3px;background:transparent;color:#e1e8e0;padding:11px 10px;text-align:left;font-size:13px;font-weight:650;cursor:pointer}
+.mail-sidebar button:hover{background:#2b382e}
+.mail-sidebar button[aria-current=true]{background:#344638;color:#d5e2ce}
+.mail-sidebar button b{margin-left:auto;font-size:11px;color:#b4c5a8}
+.mail-note{margin:22px 8px 0;padding-top:14px;border-top:1px solid #3b473d;color:#aeb9ae;font-size:11px;line-height:1.6}
+.mail-list{min-height:520px}
+.mail-list-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 14px 10px;border-bottom:1px solid #e3e6df}
+.mail-list-head h2{font-size:20px;letter-spacing:-.04em}
+.mail-rows{max-height:calc(100vh - 390px);min-height:390px;overflow:auto}
+.mail-rows .mrow{padding:15px 13px}
+.mail-rows .snip{max-width:100%}
+.mail-empty{padding:36px 20px;color:#69736b;font-size:13px}
+.mail-empty b{display:block;color:#273128;font-size:15px;margin-bottom:4px}
+.mail-detail{min-width:0}
+.mail-detail>.pane{min-height:520px}
+.mail-placeholder{display:grid;align-content:center;justify-items:center;text-align:center;padding:48px 28px!important;min-height:520px}
+.mail-placeholder h3{font-size:22px;margin-top:12px}
+.mail-placeholder p{max-width:360px;color:#69736b;font-size:13px;margin-top:7px}
+.mail-placeholder-icon{width:54px;height:54px;display:grid;place-items:center;background:#e9eee5;color:#435747;border-radius:50%;font-size:23px}
+.mail-layout .pane-top .btns{justify-content:flex-end}
+.mail-layout .pane-top .btns .btn{font-size:12px;padding-inline:12px}
+.mail-layout .dgrid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+@media(max-width:1100px){.mail-layout{grid-template-columns:180px minmax(260px,340px) minmax(0,1fr);gap:10px}.mail-layout .pane-top{display:grid}.mail-layout .pane-top .btns{justify-content:flex-start}}
+@media(max-width:850px){.mail-layout{grid-template-columns:1fr}.mail-sidebar{min-height:0;display:flex;flex-wrap:wrap;align-items:center}.mail-brand{width:100%;padding-bottom:4px}.mail-note{display:none}.mail-list{min-height:0}.mail-rows{max-height:420px;min-height:120px}.mail-detail>.pane{min-height:0}.mail-layout.has-sel .mail-list{display:none}.mail-layout:not(.has-sel) .mail-detail{display:none}.mail-layout .back{display:inline-flex}}
+
 </style>
 </head>
 <body>
@@ -566,7 +600,7 @@ textarea{line-height:1.65}
    <span class="wm"><b>PinnacleBuild<span>-Studios</span></b><small>Bedrock build studio</small></span>
   </a>
   <nav class="nav" aria-label="Main">
-   <a href="#home" data-nav="home">Home</a><a href="#vault" data-nav="vault">The Vault</a><a href="#how" data-nav="how">How it works</a><a href="#socials" data-nav="socials">Socials</a><a href="#commission" data-nav="commission">Commissions</a>
+   <a href="#home" data-nav="home">Home</a><a href="#vault" data-nav="vault">The Vault</a><a href="#how" data-nav="how">How it works</a><a href="#socials" data-nav="socials">Socials</a><a href="#commission" data-nav="commission">Commissions</a><a href="#commission-list" data-nav="commission-list">Commission List</a>
   </nav>
   <div class="hdr-right" id="hdr-right"></div>
  </div>
@@ -853,14 +887,14 @@ async function loadSite(){
  if (!CONNECTED) return;
  try {
   const j = GAS ? await post({action:'site'}) : await (await fetch(API + (API.includes('?') ? '&' : '?') + 'action=site')).json();
-  if (j && j.ok) { remote = {settings:j.settings || {}, featured:Array.isArray(j.featured) ? j.featured : [], builds:Array.isArray(j.builds) ? j.builds : []}; renderChrome(); if (!['commission','manager'].includes(currentView)) render(); }
+  if (j && j.ok) { remote = {settings:j.settings || {}, featured:Array.isArray(j.featured) ? j.featured : [], builds:Array.isArray(j.builds) ? j.builds : []}; renderChrome(); if (!['commission','manager','commission-list'].includes(currentView)) render(); }
  } catch { /* keep the built-in builds */ }
 }
 
 /* =========================================================
    STUDIO MANAGER (password protected; changes save to your Google Sheet)
    ========================================================= */
-const M = {token:null, demo:false, tab:'inbox', comms:[], sel:null, filter:'active', q:'', edit:null, ownerEmail:''};
+const M = {token:null, demo:false, tab:'inbox', comms:[], sel:null, filter:'active', q:'', mailFolder:'inbox', mailQ:'', edit:null, ownerEmail:''};
 try { M.token = sessionStorage.getItem('pb_token'); } catch {}
 const SAMPLE = () => [
  {id:'PB-1003', received:new Date(Date.now() - 36e5).toISOString(), status:'New', name:'Sample: Alex', gmail:'alex.sample@gmail.com', discord:'alex_builds', type:'Creature or dragon', platform:'Xbox', size:'About 60 blocks long', budget:'$30', deadline:'', idea:'A Night Fury perched on a cliff, wings half open. (This is sample data so you can try the manager.)', refs:'', quote:'', notes:'', read:false, archived:false, thread:[]},
@@ -974,6 +1008,43 @@ function paneCommission(c){
  </div>`;
 }
 
+
+/* ---------- standalone Gmail-style commission list ---------- */
+function renderCommissionSurface(){
+ if (HASH === 'commission-list') renderCommissionList();
+ else renderTab();
+}
+function viewCommissionList(){
+ if (!M.token && !M.demo) return viewManager();
+ const done = M.mailFolder === 'done', q = M.mailQ.toLowerCase();
+ const visible = M.comms.filter(c => !c.archived && (done ? c.status === 'Done' : c.status !== 'Done'))
+  .filter(c => !q || [c.id,c.name,c.gmail,c.discord,c.type,c.idea].join(' ').toLowerCase().includes(q))
+  .sort((a,b) => new Date(b.received) - new Date(a.received));
+ const c = M.comms.find(x => x.id === M.sel && !x.archived && (done ? x.status === 'Done' : x.status !== 'Done'));
+ const inboxCount = M.comms.filter(x => !x.archived && x.status !== 'Done').length;
+ const doneCount = M.comms.filter(x => !x.archived && x.status === 'Done').length;
+ return `<section class="mail-top"><div class="wrap"><p class="label">Studio workspace</p><h1>Commission List<span>.</span></h1><p class="intro">Every request in one place. Open a request to read the full details, then move it to Done Commissions when the build is finished.</p></div></section>
+ <section class="mail-area"><div class="mail-layout${c ? ' has-sel' : ''}">
+  <aside class="mail-sidebar">
+   <p class="mail-brand">YOUR COMMISSIONS</p>
+   <button type="button" data-mail-folder="inbox" aria-current="${!done}">${ic('inbox')} <span>Commissions</span><b>${inboxCount}</b></button>
+   <button type="button" data-mail-folder="done" aria-current="${done}">${ic('check-circle')} <span>Done Commissions</span><b>${doneCount}</b></button>
+   <div class="mail-note">Private studio page · Only visible after owner sign-in</div>
+  </aside>
+  <div class="mail-list box">
+   <div class="mail-list-head"><h2>${done ? 'Done Commissions' : 'Commissions'}</h2><button type="button" class="btn btn-plain btn-sm" id="refresh">${ic('refresh-cw')} Refresh</button></div>
+   <label class="msearch">${ic('search')}<input id="mail-q" type="search" placeholder="Search commissions" value="${esc(M.mailQ)}"></label>
+   <div class="mail-rows">${visible.length ? visible.map(x => `<button type="button" class="mrow${x.read ? '' : ' unread'}" data-sel="${esc(x.id)}" aria-current="${x.id === M.sel}"><span class="dot"></span><span><span class="nm">${esc(x.name)}</span><span class="snip">${esc(x.gmail)} · ${esc(x.type)} — ${esc(x.idea)}</span><span class="st" data-s="${esc(x.status)}">${esc(x.status)}</span></span><span class="when">${esc(shortDate(x.received))}<br>${esc(x.id)}</span></button>`).join('') : `<div class="mail-empty"><b>${done ? 'No completed commissions yet' : 'Your inbox is clear'}</b><p>${done ? 'When you finish a request, open it and click “Mark as done”.' : 'New customer requests will appear here automatically.'}</p></div>`}</div>
+  </div>
+  <div class="mail-detail">${c ? paneCommission(c) : `<div class="pane mail-placeholder"><div class="mail-placeholder-icon">${ic('inbox')}</div><h3>Select a commission</h3><p>Choose a request from the list to read the complete submission, contact details, references, and notes.</p></div>`}</div>
+ </div></section>`;
+}
+function renderCommissionList(){
+ const el = $('#main'); if (!el) return;
+ el.innerHTML = viewCommissionList();
+ fixIcons();
+}
+
 /* builds */
 function tabBuilds(){
  const all = builds(true), b = M.edit === 'new' ? null : all.find(x => x.id === M.edit);
@@ -1052,7 +1123,7 @@ function tabSettings(){
 const say = (id, t, err) => { const m = $('#' + id); if (m) { m.textContent = t; m.classList.toggle('err', !!err); } };
 async function act(msgId, fn, okText){
  say(msgId, 'Saving…');
- try { const r = await fn(); if (r.site) applySite(r.site); if (r.commissions) M.comms = r.commissions; renderTab(); say(msgId, okText); return r; }
+ try { const r = await fn(); if (r.site) applySite(r.site); if (r.commissions) M.comms = r.commissions; renderCommissionSurface(); say(msgId, okText); return r; }
  catch (e) { say(msgId, e.message, true); }
 }
 function fileToBase64(file, asImage){
@@ -1078,11 +1149,12 @@ document.addEventListener('click', async e => {
  if (t.id === 'signout') { signOut(); return; }
  if (t.dataset.go) { navigate(t.dataset.go); return; }
  if (t.dataset.tab) { M.tab = t.dataset.tab; renderTab(); return; }
+ if (t.dataset.mailFolder) { M.mailFolder = t.dataset.mailFolder; M.sel = null; renderCommissionList(); return; }
  if (t.dataset.filter) { M.filter = t.dataset.filter; renderTab(); return; }
  if (t.id === 'refresh') { await act('u-msg', () => call('commissions'), ''); return; }
- if (t.dataset.sel) { M.sel = t.dataset.sel; const c = M.comms.find(x => x.id === M.sel); renderTab(); if (c && !c.read) { c.read = true; call('updateCommission', {id:c.id, read:true}).then(r => { if (r.commissions) M.comms = r.commissions; }).catch(() => {}); } return; }
- if (t.id === 'back') { M.sel = null; renderTab(); return; }
- if (t.id === 'mark-done') { const c = M.comms.find(x => x.id === M.sel); if (!c) return; await act('u-msg', () => call('updateCommission', {id:c.id, status:'Done'}), 'Marked done and moved to Done Commissions.'); M.tab = 'done'; renderTab(); return; }
+ if (t.dataset.sel) { M.sel = t.dataset.sel; const c = M.comms.find(x => x.id === M.sel); renderCommissionSurface(); if (c && !c.read) { c.read = true; call('updateCommission', {id:c.id, read:true}).then(r => { if (r.commissions) M.comms = r.commissions; }).catch(() => {}); } return; }
+ if (t.id === 'back') { M.sel = null; renderCommissionSurface(); return; }
+ if (t.id === 'mark-done') { const c = M.comms.find(x => x.id === M.sel); if (!c) return; await act('u-msg', () => call('updateCommission', {id:c.id, status:'Done'}), 'Marked done and moved to Done Commissions.'); if (HASH === 'commission-list') { M.mailFolder = 'done'; renderCommissionList(); } else { M.tab = 'done'; renderTab(); } return; }
  if (t.id === 'archive') { const c = M.comms.find(x => x.id === M.sel); await act('u-msg', () => call('updateCommission', {id:c.id, archived:!c.archived}), c.archived ? 'Moved to inbox.' : 'Archived.'); return; }
  if (t.id === 'del') { if (!t.dataset.armed) { t.dataset.armed = 1; t.textContent = 'Click again to delete'; setTimeout(() => { t.textContent = 'Delete'; delete t.dataset.armed; }, 4000); return; } const id = M.sel; M.sel = null; await act('u-msg', () => call('deleteCommission', {id}), 'Deleted.'); return; }
  if (t.id === 'b-new') { M.edit = 'new'; renderTab(); return; }
@@ -1120,6 +1192,7 @@ document.addEventListener('change', async e => {
 document.addEventListener('input', e => {
  if (e.target.id === 'vq') { vQuery = e.target.value; renderVaultGrid(); }
  if (e.target.id === 'mq') { M.q = e.target.value; const pos = e.target.selectionStart; renderTab(); const n = $('#mq'); n.focus(); n.setSelectionRange(pos, pos); }
+ if (e.target.id === 'mail-q') { M.mailQ = e.target.value; const pos = e.target.selectionStart; renderCommissionList(); const n = $('#mail-q'); n.focus(); n.setSelectionRange(pos, pos); }
 });
 
 document.addEventListener('submit', async e => {
@@ -1161,15 +1234,16 @@ let HASH = (() => { try { return decodeURIComponent(location.hash.slice(1)); } c
 const SECTIONS = ['how','socials','featured','referrals'];
 function render(){
  const h = HASH;
- const view = h === 'vault' ? 'vault' : h.startsWith('build-') ? 'build' : h === 'commission' ? 'commission' : h === 'manager' ? 'manager' : 'home';
+ const view = h === 'vault' ? 'vault' : h.startsWith('build-') ? 'build' : h === 'commission' ? 'commission' : h === 'commission-list' ? 'commission-list' : h === 'manager' ? 'manager' : 'home';
  if (view !== 'build') gIndex = 0;
  if (view !== 'commission' && currentView === 'commission' && lastRequest) lastRequest = null;
  currentView = view;
  const main = $('#main');
- main.innerHTML = view === 'vault' ? viewVault() : view === 'build' ? viewBuild(h.slice(6)) : view === 'commission' ? viewCommission() : view === 'manager' ? viewManager() : viewHome();
+ main.innerHTML = view === 'vault' ? viewVault() : view === 'build' ? viewBuild(h.slice(6)) : view === 'commission' ? viewCommission() : view === 'commission-list' ? viewCommissionList() : view === 'manager' ? viewManager() : viewHome();
  if (view === 'vault') renderVaultGrid();
  if (view === 'home') afterHome();
  if (view === 'manager' && (M.token || M.demo)) renderTab();
+ if (view === 'commission-list' && (M.token || M.demo)) renderCommissionList();
  $('footer').hidden = view === 'manager' && !!(M.token || M.demo);
  const navKey = view !== 'home' ? (view === 'build' ? 'vault' : view) : (['how','socials'].includes(h) ? h : 'home');
  $$('.nav a').forEach(a => a.toggleAttribute('aria-current', a.dataset.nav === navKey));

@@ -904,7 +904,8 @@ function viewManager(){
    <p style="font-size:14px;color:var(--muted)">Forgot it? In your Google Sheet, use <b>PinnacleBuild-Studios → 2. Set manager password</b>.</p></form>`;
  }
  const newCount = M.comms.filter(c => !c.read && !c.archived).length;
- const tabs = [['inbox','inbox','Commissions', newCount], ['builds','cube','Builds'], ['home','home','Homepage'], ['settings','gear','Settings']];
+ const doneCount = M.comms.filter(c => !c.archived && c.status === 'Done').length;
+ const tabs = [['inbox','inbox','Commissions', newCount], ['done','check-circle','Done Commissions', doneCount], ['builds','cube','Builds'], ['home','home','Homepage'], ['settings','gear','Settings']];
  return `<div class="mgr"><nav class="rail" aria-label="Manager">
   <p class="who">Signed in as owner</p>
   ${tabs.map(([k, i, l, n]) => `<button type="button" data-tab="${k}" aria-current="${M.tab === k}">${ic(i)} ${l}${n ? `<span class="count">${n}</span>` : ''}</button>`).join('')}
@@ -913,11 +914,15 @@ function viewManager(){
 }
 function renderTab(){
  const el = $('#mtab'); if (!el) return;
- el.innerHTML = ({inbox:tabInbox, builds:tabBuilds, home:tabHome, settings:tabSettings})[M.tab]();
+ el.innerHTML = ({inbox:tabInbox, done:tabDoneCommissions, builds:tabBuilds, home:tabHome, settings:tabSettings})[M.tab]();
  $$('[data-tab]').forEach(b => b.setAttribute('aria-current', b.dataset.tab === M.tab));
  const n = M.comms.filter(c => !c.read && !c.archived).length, badge = $('[data-tab="inbox"] .count');
  if (badge) badge.textContent = n; else if (n) $('[data-tab="inbox"]').insertAdjacentHTML('beforeend', `<span class="count">${n}</span>`);
  if (!n && badge) badge.remove();
+ const doneN = M.comms.filter(c => !c.archived && c.status === 'Done').length;
+ const doneBadge = $('[data-tab="done"] .count');
+ if (doneBadge) doneBadge.textContent = doneN; else if (doneN) $('[data-tab="done"]').insertAdjacentHTML('beforeend', `<span class="count">${doneN}</span>`);
+ if (!doneN && doneBadge) doneBadge.remove();
 }
 const FILTERS = [['active','Active', c => !c.archived && !['Done','Declined'].includes(c.status)], ['new','New', c => !c.archived && c.status === 'New'], ['all','All', c => !c.archived], ['done','Done', c => !c.archived && ['Done','Declined'].includes(c.status)], ['archived','Archived', c => c.archived]];
 
@@ -935,13 +940,24 @@ function tabInbox(){
   : `<p style="padding:24px;color:var(--muted)">No commissions here yet.</p>`}
  </div>${c ? paneCommission(c) : `<div class="pane"><p style="color:var(--muted)">Select a commission to read it.</p></div>`}</div>`;
 }
+function tabDoneCommissions(){
+ const q = M.q.toLowerCase();
+ const list = M.comms.filter(c => !c.archived && c.status === 'Done')
+  .filter(c => !q || [c.id,c.name,c.gmail,c.discord,c.type,c.idea].join(' ').toLowerCase().includes(q));
+ const c = M.comms.find(x => x.id === M.sel && !x.archived && x.status === 'Done');
+ return `<div class="mhead"><div><h2>Done Commissions</h2><p style="color:var(--muted);margin-top:5px">Finished requests, kept with all their original details.</p></div><button class="btn btn-plain btn-sm" type="button" id="refresh">${ic('refresh-cw')} Refresh</button></div>
+ <div class="inbox${c ? ' has-sel' : ''}"><div class="box">
+  <label class="msearch">${ic('search')}<input id="mq" type="search" placeholder="Search completed commissions" value="${esc(M.q)}"></label>
+  ${list.length ? list.map(x => `<button type="button" class="mrow" data-sel="${esc(x.id)}" aria-current="${x.id === M.sel}"><span class="dot"></span><span><span class="nm">${esc(x.name)}</span><span class="snip">${esc(x.type)} · ${esc(x.idea)}</span><span class="st" data-s="Done" style="margin:0">Done</span></span><span class="when">${esc(shortDate(x.received))}<br>${esc(x.id)}</span></button>`).join('') : `<p style="padding:24px;color:var(--muted)">No completed commissions yet. Open a request in Commissions and click “Mark as done” when the build is finished.</p>`}
+ </div>${c ? paneCommission(c) : `<div class="pane"><p style="color:var(--muted)">Select a completed commission to see the full request.</p></div>`}</div>`;
+}
 function paneCommission(c){
  const gmailLink = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(c.gmail)}&su=${encodeURIComponent('Your PinnacleBuild-Studios commission (' + c.id + ')')}`;
  const facts = [['Gmail', c.gmail], ['Discord', c.discord], ['Build type', c.type], ['Platform', c.platform], ['Size', c.size], ['Budget', c.budget], ['Deadline', c.deadline && niceDate(c.deadline)], ['Received', new Date(c.received).toLocaleString()]].filter(x => x[1]);
  const refs = String(c.refs || '').split(/\s+/).filter(Boolean);
  return `<div class="pane"><button class="link back" type="button" id="back">${ic('left')} All commissions</button>
   <div class="pane-top"><div><h3>${esc(c.name)}</h3><p class="sub">${esc(c.id)} · <span class="st" data-s="${esc(c.status)}" style="margin:0">${esc(c.status)}</span></p></div>
-   <div class="btns"><a class="btn btn-moss btn-sm" ${out(gmailLink)}>${ic('send')} Open in Gmail</a><button class="btn btn-plain btn-sm" type="button" id="archive">${c.archived ? 'Move to inbox' : 'Archive'}</button><button class="btn btn-danger btn-sm" type="button" id="del">Delete</button></div></div>
+   <div class="btns">${c.status !== 'Done' ? `<button class="btn btn-leaf btn-sm" type="button" id="mark-done">${ic('check-circle')} Mark as done</button>` : `<span class="st" data-s="Done">Completed</span>`}<a class="btn btn-moss btn-sm" ${out(gmailLink)}>${ic('send')} Open in Gmail</a><button class="btn btn-plain btn-sm" type="button" id="archive">${c.archived ? 'Move to inbox' : 'Archive'}</button><button class="btn btn-danger btn-sm" type="button" id="del">Delete</button></div></div>
   <div class="dgrid">${facts.map(([l, v]) => `<div><small>${l}</small><b>${esc(v)}</b></div>`).join('')}</div>
   <p class="ph">The idea</p><div class="idea">${esc(c.idea)}</div>
   ${refs.length ? `<p class="ph">References</p><div class="idea">${refs.map(r => https(r) ? `<a ${out(r)}>${esc(r)}</a>` : esc(r)).join('<br>')}</div>` : ''}
@@ -1066,6 +1082,7 @@ document.addEventListener('click', async e => {
  if (t.id === 'refresh') { await act('u-msg', () => call('commissions'), ''); return; }
  if (t.dataset.sel) { M.sel = t.dataset.sel; const c = M.comms.find(x => x.id === M.sel); renderTab(); if (c && !c.read) { c.read = true; call('updateCommission', {id:c.id, read:true}).then(r => { if (r.commissions) M.comms = r.commissions; }).catch(() => {}); } return; }
  if (t.id === 'back') { M.sel = null; renderTab(); return; }
+ if (t.id === 'mark-done') { const c = M.comms.find(x => x.id === M.sel); if (!c) return; await act('u-msg', () => call('updateCommission', {id:c.id, status:'Done'}), 'Marked done and moved to Done Commissions.'); M.tab = 'done'; renderTab(); return; }
  if (t.id === 'archive') { const c = M.comms.find(x => x.id === M.sel); await act('u-msg', () => call('updateCommission', {id:c.id, archived:!c.archived}), c.archived ? 'Moved to inbox.' : 'Archived.'); return; }
  if (t.id === 'del') { if (!t.dataset.armed) { t.dataset.armed = 1; t.textContent = 'Click again to delete'; setTimeout(() => { t.textContent = 'Delete'; delete t.dataset.armed; }, 4000); return; } const id = M.sel; M.sel = null; await act('u-msg', () => call('deleteCommission', {id}), 'Deleted.'); return; }
  if (t.id === 'b-new') { M.edit = 'new'; renderTab(); return; }

@@ -1059,7 +1059,7 @@ function renderCommissionList(){
  if (!M.publicLoaded && !M.publicLoading) loadPublicCommissions();
 }
 async function loadPublicCommissions(){
- if (!CONNECTED) { M.publicError = 'The public commission feed is not connected yet.'; renderCommissionList(); return; }
+ if (!CONNECTED) { M.publicError = 'The public commission feed is not connected yet.'; M.publicLoaded = true; renderCommissionList(); return; }
  M.publicLoading = true; M.publicError = ''; renderCommissionList();
  try {
   const r = await post({action:'publicCommissions'});

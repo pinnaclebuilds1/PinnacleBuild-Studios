@@ -24,9 +24,9 @@ window.PINNACLE_API = "https://script.google.com/macros/s/AKfycbxM1nMvqEx4chGTUE
 /* VOICE: a real solo Bedrock builder: confident, casual, first person.
    IDEA: a night forest with grass-block edges; chunky block buttons and pixel labels nod to the game without copying it.
    PICTURE: the owner's own Deadly Nadder render fills the hero; real screenshots carry every card and build page.
-   COLOUR and TYPE: forest night #0b1811, parchment #f2ead8, leaf #a3e36f; Fraunces 800 headlines, Pixelify Sans labels, DM Sans body.
+   COLOUR and TYPE: forest night #0b1811, parchment #f2ead8, leaf #39ff14; Fraunces 800 headlines, Pixelify Sans labels, DM Sans body.
    LAYOUT: sticky header; hero; featured mosaic; XP-bar process; socials; referrals; footer; #vault, #build-*, #commission, #manager views. */
-:root{--night:#0b1811;--panel:#13281c;--leaf:#a3e36f;--leaf-dk:#6fae43;--moss:#2b6240;--moss-dk:#1d4a2f;--cream:#f2ead8;--cream2:#f9f4e7;--line:#ddd0b3;--ink:#17261c;--muted:#56645a;--red:#b4432c;
+:root{--night:#0b1811;--panel:#13281c;--leaf:#39ff14;--leaf-dk:#269b3b;--moss:#2b6240;--moss-dk:#1d4a2f;--cream:#f2ead8;--cream2:#f9f4e7;--line:#ddd0b3;--ink:#17261c;--muted:#56645a;--red:#b4432c;
 --serif:Fraunces,Georgia,serif;--pixel:"Pixelify Sans","Courier New",monospace;--sans:"DM Sans",system-ui,sans-serif;color-scheme:light}
 *{box-sizing:border-box;min-width:0}
 html{scroll-behavior:smooth;scroll-padding-top:96px}
@@ -38,7 +38,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 [hidden]{display:none!important}
 .wrap{width:min(1240px,calc(100% - 2*max(4vw,16px)));margin-inline:auto}
 .ic{width:1.1em;height:1.1em;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-:focus-visible{outline:3px solid #6fae43;outline-offset:3px}
+:focus-visible{outline:3px solid #269b3b;outline-offset:3px}
 .label{display:flex;align-items:center;gap:10px;margin-bottom:16px;font:600 16px/1 var(--pixel);color:var(--moss)}
 .label::before{content:"";width:10px;height:10px;background:currentColor;box-shadow:3px 3px 0 #00000026}
 .dark .label{color:var(--leaf)}
@@ -82,7 +82,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .hero .wrap{position:relative;z-index:1;min-height:clamp(580px,80vh,760px);display:flex;flex-direction:column;justify-content:center;padding-block:64px 104px}
 .hero-copy{max-width:700px}
 .status{display:inline-flex;align-items:center;gap:10px;font:600 15px/1 var(--pixel);background:#0b1811b8;border:2px solid #2f5a3f;border-radius:6px;padding:9px 14px;color:#dcebdf;text-decoration:none}
-.status i{width:10px;height:10px;background:var(--leaf);box-shadow:0 0 0 3px #a3e36f40}
+.status i{width:10px;height:10px;background:var(--leaf);box-shadow:0 0 0 3px #39ff1440}
 .status.closed i{background:#e0a35a;box-shadow:0 0 0 3px #e0a35a40}
 .hero h1{font-weight:800;font-size:clamp(46px,7vw,98px);line-height:.98;margin-top:26px}
 .hero h1 span{display:block;color:var(--leaf)}
@@ -125,11 +125,11 @@ h2 span{display:block;color:var(--moss)}.dark h2 span{color:var(--leaf)}
 .tile p{color:#d7e3da;font-size:15px;margin-top:6px;max-width:40em}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
 .chip{display:inline-flex;align-items:center;gap:6px;font:500 14px/1 var(--pixel);padding:6px 9px;border-radius:5px;background:#ffffff1f;border:1px solid #ffffff38;color:#eef5f0}
-.badge{position:absolute;top:14px;left:14px;z-index:1;font:600 14px/1 var(--pixel);background:#0b1811de;border:2px solid #a3e36f66;color:var(--leaf);padding:7px 10px;border-radius:5px}
+.badge{position:absolute;top:14px;left:14px;z-index:1;font:600 14px/1 var(--pixel);background:#0b1811de;border:2px solid #39ff1466;color:var(--leaf);padding:7px 10px;border-radius:5px}
 
 /* xp process */
 .xpbar{position:relative;height:24px;border:3px solid #030a06;background:#16251b;border-radius:4px;margin-top:48px}
-.xpbar>i{position:absolute;left:2px;top:2px;bottom:2px;width:0;background:repeating-linear-gradient(90deg,#8fd45b 0 22px,#6fae43 22px 25px);box-shadow:inset 0 4px 0 #c7f59f8c;transition:width 1.8s cubic-bezier(.3,.7,.2,1)}
+.xpbar>i{position:absolute;left:2px;top:2px;bottom:2px;width:0;background:repeating-linear-gradient(90deg,#8fd45b 0 22px,#269b3b 22px 25px);box-shadow:inset 0 4px 0 #c7f59f8c;transition:width 1.8s cubic-bezier(.3,.7,.2,1)}
 .xpbar.on>i{width:calc(100% - 4px)}
 .xpbar::before,.xpbar::after{content:"";position:absolute;top:-3px;bottom:-3px;width:3px;background:#030a06;z-index:1}
 .xpbar::before{left:33.33%}.xpbar::after{left:66.66%}
@@ -562,7 +562,7 @@ textarea{line-height:1.65}
 <header class="hdr">
  <div class="wrap">
   <a class="logo" href="#home" aria-label="PinnacleBuild-Studios home">
-   <span class="mark"><svg width="36" height="36" viewBox="4 4 56 56" fill="none" aria-hidden="true"><path d="M10 46 24 27l8 10 9-14 13 23M33 24l8-12 5 8" stroke="#a3e36f" stroke-width="4" stroke-linecap="square" stroke-linejoin="round"/><path d="M16 51h32" stroke="#fffaf0" stroke-opacity=".5" stroke-width="2.4"/></svg></span>
+   <span class="mark"><svg width="36" height="36" viewBox="4 4 56 56" fill="none" aria-hidden="true"><path d="M10 46 24 27l8 10 9-14 13 23M33 24l8-12 5 8" stroke="#39ff14" stroke-width="4" stroke-linecap="square" stroke-linejoin="round"/><path d="M16 51h32" stroke="#fffaf0" stroke-opacity=".5" stroke-width="2.4"/></svg></span>
    <span class="wm"><b>PinnacleBuild<span>-Studios</span></b><small>Bedrock build studio</small></span>
   </a>
   <nav class="nav" aria-label="Main">
@@ -664,7 +664,7 @@ function renderChrome(){
  $('#hdr-right').innerHTML = `<a class="sicon" ${out(s.discord)} aria-label="Discord">${fb('discord','D')}</a><a class="sicon" ${out(s.youtube)} aria-label="YouTube">${fb('youtube','Y')}</a><a class="sicon" ${out(s.x)} aria-label="X">${fb('x-twitter','X')}</a>
   <a class="btn btn-leaf" href="#commission">${ic('pen')} ${open ? 'Request a build' : 'Commissions'}</a>`;
  $('#footer').innerHTML = `<div class="wrap foot">
-  <div><a class="logo" href="#home"><span class="mark"><svg width="36" height="36" viewBox="4 4 56 56" fill="none" aria-hidden="true"><path d="M10 46 24 27l8 10 9-14 13 23M33 24l8-12 5 8" stroke="#a3e36f" stroke-width="4" stroke-linecap="square" stroke-linejoin="round"/><path d="M16 51h32" stroke="#fffaf0" stroke-opacity=".5" stroke-width="2.4"/></svg></span><span class="wm"><b>Pinnacle<span>Builds</span></b><small>Bedrock build studio</small></span></a>
+  <div><a class="logo" href="#home"><span class="mark"><svg width="36" height="36" viewBox="4 4 56 56" fill="none" aria-hidden="true"><path d="M10 46 24 27l8 10 9-14 13 23M33 24l8-12 5 8" stroke="#39ff14" stroke-width="4" stroke-linecap="square" stroke-linejoin="round"/><path d="M16 51h32" stroke="#fffaf0" stroke-opacity=".5" stroke-width="2.4"/></svg></span><span class="wm"><b>Pinnacle<span>Builds</span></b><small>Bedrock build studio</small></span></a>
    <p class="bio">Dragons, creatures, and oversized fantasy houses, built by hand in Minecraft Bedrock.</p></div>
   <div><h4>Explore</h4><a class="fl" href="#home">Home</a><a class="fl" href="#vault">The Vault</a><a class="fl" href="#how">How commissions work</a><a class="fl" href="#commission">Request a build</a></div>
   <div><h4>Follow</h4><a class="fl" ${out(s.discord)}>Discord</a><a class="fl" ${out(s.youtube)}>YouTube</a><a class="fl" ${out(s.x)}>X</a></div>

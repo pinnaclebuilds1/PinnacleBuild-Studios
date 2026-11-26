@@ -1,6 +1,6 @@
 /**
  * PinnacleBuild-Studios backend for Google Apps Script.
- * Attach this script to a Google Sheet, run setupSite(), setManagerPassword(),
+ * Attach this script to a Google Sheet, run setupSite(), then setGoogleClientId().
  * then deploy as a Web app (Execute as: Me; access: Anyone).
  */
 
@@ -40,7 +40,7 @@ function setupSite() {
   }
   const settings = readSettings_();
   if (!settings.confirm) writeSetting_('confirm', 'true');
-  SpreadsheetApp.getUi().alert('Setup complete. Next choose PinnacleBuild-Studios → 2. Set manager password.');
+  SpreadsheetApp.getUi().alert('Setup complete. Next choose PinnacleBuild-Studios → 2. Set Google OAuth client ID.');
 }
 
 function setGoogleClientId() {
@@ -50,7 +50,7 @@ function setGoogleClientId() {
     ui.ButtonSet.OK_CANCEL);
   if (response.getSelectedButton() !== ui.Button.OK) return;
   const clientId = response.getResponseText().trim();
-  if (!/^[0-9A-Za-z._-]+\\.apps\\.googleusercontent\\.com$/.test(clientId)) {
+  if (!/^[0-9A-Za-z._-]+\.apps\.googleusercontent\.com$/.test(clientId)) {
     ui.alert('That does not look like a Google OAuth Web Client ID. Nothing was changed.');
     return;
   }
@@ -233,15 +233,7 @@ function admin_(op, p) {
     writeSetting_('featured', JSON.stringify(p.ids || []));
     return {site:siteData_()};
   }
-  if (op === 'changePassword') {
-    const props = PropertiesService.getScriptProperties();
-    const salt = props.getProperty('PB_PASSWORD_SALT') || '';
-    if (hash_(salt + String(p.current || '')) !== props.getProperty('PB_PASSWORD_HASH')) throw new Error('Current password is incorrect.');
-    if (String(p.next || '').length < 10) throw new Error('New password must be at least 10 characters.');
-    const nextSalt = Utilities.getUuid();
-    props.setProperties({PB_PASSWORD_SALT:nextSalt, PB_PASSWORD_HASH:hash_(nextSalt + p.next)});
-    return {};
-  }
+
   throw new Error('Unknown manager action.');
 }
 

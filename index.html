@@ -975,8 +975,8 @@ async function handleGoogleCredential(response) {
 function viewManager(){
  if (!M.token && !M.demo) {
   if (!CONNECTED) return `<div class="setup"><p class="label">Studio manager</p><h2 style="font-size:36px">Not connected yet.</h2>
-   <p style="color:var(--muted);margin-top:10px">The manager runs on your own Google Sheet. Commissions land there and in your Gmail, and you sign in here with your password.</p>
-   <ol><li>Create a Google Sheet, open <b>Extensions → Apps Script</b>, paste in <b>Code.gs</b>, and add an HTML file named <b>Index</b> with this website’s code.</li><li>Reload the Sheet and run <b>PinnacleBuild-Studios → 1. Set up the site</b>, then <b>2. Set manager password</b>.</li><li>In Apps Script: <b>Deploy → New deployment → Web app</b> (Execute as: Me, Who has access: Anyone).</li><li>The Web app URL it gives you is your website. Open it there to use the manager.</li></ol>
+   <p style="color:var(--muted);margin-top:10px">The manager runs on your own Google Sheet. Commissions land there and in your Gmail, and you sign in here with your Google account.</p>
+   <ol><li>Create a Google Sheet, open <b>Extensions → Apps Script</b>, paste in <b>Code.gs</b>, and add an HTML file named <b>Index</b> with this website’s code.</li><li>Reload the Sheet and run <b>PinnacleBuild-Studios → 1. Set up the site</b>, then <b>2. Set Google OAuth client ID</b>.</li><li>In Apps Script: <b>Deploy → New deployment → Web app</b> (Execute as: Me, Who has access: Anyone).</li><li>The Web app URL it gives you is your website. Open it there to use the manager.</li></ol>
    <button class="btn btn-moss" type="button" id="demo">${ic('grid')} Preview the manager with sample data</button></div>`;
   return `<section class="login"><p class="label">Studio manager</p><h2>Sign in.</h2>
    <p style="color:var(--muted)">Use the authorized Google account to open the private studio manager.</p>
@@ -1183,9 +1183,7 @@ function tabSettings(){
    <label class="f full">Send new commissions to<input id="n-to" type="email" value="${esc(s.notify || '')}" placeholder="${esc(M.ownerEmail || 'your Gmail')}"><em>Leave empty to use the Gmail that owns the Sheet.</em></label>
    <label class="check full"><input id="n-conf" type="checkbox"${s.confirm === 'true' ? ' checked' : ''}> Email customers a copy of their request</label>
    <div class="row-end"><button class="btn btn-moss btn-sm" type="submit">${ic('check')} Save email settings</button><p class="msg" id="n-msg" role="status"></p></div></div></form>
-  <form class="pane" id="pform"><h3>Password</h3><div class="mform" style="margin-top:12px">
-   <label class="f">Current password<input id="p-cur" type="password" autocomplete="current-password"></label><label class="f">New password <em>10+ characters</em><input id="p-new" type="password" autocomplete="new-password"></label>
-   <div class="row-end"><button class="btn btn-moss btn-sm" type="submit">${ic('lock')} Change password</button><p class="msg" id="p-msg" role="status"></p></div></div></form></div>`;
+</div>`;
 }
 
 /* manager events */
@@ -1285,7 +1283,6 @@ document.addEventListener('submit', async e => {
  if (f.id === 'fform') { const ids = [0, 1, 2].map(i => v('feat-' + i)); if (new Set(ids).size < 3) return say('fe-msg', 'Pick three different builds.', true); return act('fe-msg', () => call('saveFeatured', {ids}), 'Saved.'); }
  if (f.id === 'sform') { for (const k of ['s-d','s-y','s-x']) if (v(k) && !https(v(k))) return say('s-msg', 'Links must start with https://', true); return act('s-msg', () => call('saveSettings', {settings:{discord:v('s-d'), youtube:v('s-y'), x:v('s-x')}}), 'Saved.'); }
  if (f.id === 'nform') return act('n-msg', () => call('saveSettings', {settings:{notify:v('n-to'), confirm:$('#n-conf').checked ? 'true' : 'false'}}), 'Saved.');
- if (f.id === 'pform') { if (v('p-new').length < 10) return say('p-msg', 'Use at least 10 characters.', true); return act('p-msg', () => call('changePassword', {current:$('#p-cur').value, next:$('#p-new').value}), 'Password changed.'); }
 });
 
 async function openManager(){

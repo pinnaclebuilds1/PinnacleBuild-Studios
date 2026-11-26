@@ -75,6 +75,8 @@ function doPost(e) {
   }
 }
 
+// AI integration is intentionally server-side only. API credentials belong in
+// Script Properties (OPENAI_API_KEY / OPENAI_MODEL), never in index.html.
 function route_(req) {
   if (req.action === 'commission') return createCommission_(req);
   if (req.action === 'googleLogin') return googleLogin_(req.credential);

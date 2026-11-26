@@ -889,7 +889,7 @@ function viewCommission(){
    <div class="actions" style="justify-content:center"><a class="btn btn-moss" href="#vault">Explore the Vault</a><button class="btn btn-plain" type="button" id="again">Send another request</button></div></div>`;
  else if (!open) main = `<div class="card"><p class="label">Commissions closed</p><h2 style="font-size:clamp(30px,3.6vw,44px)">Taking a short break.</h2><p style="color:var(--muted);margin-top:12px">${esc(s.closedNote)}</p><div class="actions"><a class="btn btn-moss" href="#vault">Explore the Vault</a><a class="btn btn-plain" ${out(s.discord)}>Follow on Discord</a></div></div>`;
  else main = `<div class="card"><form class="form" id="cform" novalidate>
-   <label class="f">Your name <span class="req">*</span><input id="c-name" autocomplete="name" maxlength="80" required></label>
+   <label class="f">Your name <span class="req">*</span><input id="c-name" autocomplete="name" maxlength="80" value="${esc(M.userProfile.name || M.userProfile.displayName || '')}" required></label>
    <label class="f">Public display name<input id="c-public-name" maxlength="60" value="${esc(M.userProfile.displayName || M.userProfile.name || '')}" readonly></label>
    <label class="f">Gmail<input id="c-gmail" type="email" autocomplete="email" value="${esc(M.userProfile.email || '')}" readonly></label>
    <label class="f">Discord username <span class="req">*</span><input id="c-discord" placeholder="yourname" maxlength="60" required></label>

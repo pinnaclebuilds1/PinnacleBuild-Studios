@@ -950,7 +950,7 @@ async function loadSite(){
 /* =========================================================
    STUDIO MANAGER (password protected; changes save to your Google Sheet)
    ========================================================= */
-const M = {token:null, userToken:null, userProfile:null, memberData:null, demo:false, tab:'inbox', comms:[], sel:null, filter:'active', q:'', mailFolder:'inbox', mailQ:'', publicComms:[], publicQueue:[], publicSel:null, publicLoaded:false, publicLoading:false, publicError:'', edit:null, ownerEmail:'', profile:null, community:{feedback:[],referrals:[]}};
+const M = {token:null, userToken:null, userProfile:null, memberData:null, members:[], demo:false, tab:'inbox', comms:[], sel:null, filter:'active', q:'', mailFolder:'inbox', mailQ:'', publicComms:[], publicQueue:[], publicSel:null, publicLoaded:false, publicLoading:false, publicError:'', edit:null, ownerEmail:'', profile:null, community:{feedback:[],referrals:[]}};
 try { M.token = sessionStorage.getItem('pb_token'); M.profile = JSON.parse(sessionStorage.getItem('pb_profile') || 'null'); M.userToken=sessionStorage.getItem('pb_user_token'); M.userProfile=JSON.parse(sessionStorage.getItem('pb_user_profile') || 'null'); } catch {}
 const SAMPLE = () => [
  {id:'PB-1003', received:new Date(Date.now() - 36e5).toISOString(), status:'New', name:'Sample: Alex', gmail:'alex.sample@gmail.com', discord:'alex_builds', type:'Creature or dragon', platform:'Xbox', size:'About 60 blocks long', budget:'$30', deadline:'', idea:'A Night Fury perched on a cliff, wings half open. (This is sample data so you can try the manager.)', refs:'', quote:'', notes:'', read:false, archived:false, thread:[]},
@@ -1067,7 +1067,7 @@ function viewManager(){
  const newCount = M.comms.filter(c => !c.read && !c.archived).length;
  const doneCount = M.comms.filter(c => !c.archived && c.status === 'Done').length;
  const communityCount = [...(M.community.feedback||[]), ...(M.community.referrals||[])].filter(x=>!x.approved).length;
- const tabs = [['inbox','inbox','Commissions', newCount], ['done','check-circle','Done Commissions', doneCount], ['community','users','Feedback & referrals', communityCount], ['builds','cube','Builds'], ['home','home','Homepage'], ['settings','gear','Settings']];
+ const tabs = [['inbox','inbox','Commissions', newCount], ['done','check-circle','Done Commissions', doneCount], ['community','users','Feedback & referrals', communityCount], ['members','users','Members', M.members.length], ['builds','cube','Builds'], ['home','home','Homepage'], ['settings','gear','Settings']];
  return `<div class="mgr"><nav class="rail" aria-label="Manager">
   <div class="who" style="display:flex;align-items:center;gap:9px">${M.profile && M.profile.picture ? `<img src="${esc(M.profile.picture)}" alt="" referrerpolicy="no-referrer" style="width:30px;height:30px;border-radius:50%;object-fit:cover">` : `<span style="width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--leaf);color:white">${esc(String(M.profile && M.profile.name || 'P').slice(0,1).toUpperCase())}</span>`}<span>${esc(M.profile && M.profile.name || 'Studio owner')}</span></div>
   ${tabs.map(([k, i, l, n]) => `<button type="button" data-tab="${k}" aria-current="${M.tab === k}">${ic(i)} ${l}${n ? `<span class="count">${n}</span>` : ''}</button>`).join('')}
@@ -1076,7 +1076,7 @@ function viewManager(){
 }
 function renderTab(){
  const el = $('#mtab'); if (!el) return;
- el.innerHTML = ({inbox:tabInbox, done:tabDoneCommissions, community:tabCommunity, builds:tabBuilds, home:tabHome, settings:tabSettings})[M.tab]();
+ el.innerHTML = ({inbox:tabInbox, done:tabDoneCommissions, community:tabCommunity, members:tabMembers, builds:tabBuilds, home:tabHome, settings:tabSettings})[M.tab]();
  $$('[data-tab]').forEach(b => b.setAttribute('aria-current', b.dataset.tab === M.tab));
  const n = M.comms.filter(c => !c.read && !c.archived).length, badge = $('[data-tab="inbox"] .count');
  if (badge) badge.textContent = n; else if (n) $('[data-tab="inbox"]').insertAdjacentHTML('beforeend', `<span class="count">${n}</span>`);
@@ -1215,6 +1215,11 @@ function tabCommunity(){
  return '<div class="mhead"><div><h2>Feedback & referrals</h2><p class="sub">Review visitor submissions before they appear on the public website.</p></div><button class="btn btn-plain btn-sm" type="button" id="community-refresh">Refresh</button></div>'+
  (items.length?items.map(x=>'<article class="pane community-review"><div class="pane-top"><div><p class="label">'+(x.kind==='referral'?'Referral':'Feedback')+'</p><h3>'+esc(x.displayName||'Visitor')+'</h3><p class="sub">'+esc(x.id)+' · '+esc(x.created||'')+(x.profileId?' · Member '+esc(x.profileId):'')+(x.email?' · '+esc(x.email):'')+'</p></div><span class="st" data-s="'+(x.approved?'Done':'New')+'">'+(x.approved?'Published':'Pending review')+'</span></div><p class="idea">'+esc(x.message||'')+'</p><div class="btns" style="margin-top:12px">'+(x.approved?'<button class="btn btn-plain btn-sm" data-community-hide="'+esc(x.id)+'" data-community-kind="'+x.kind+'">Unpublish</button>':'<button class="btn btn-moss btn-sm" data-community-approve="'+esc(x.id)+'" data-community-kind="'+x.kind+'">Approve & publish</button>')+'<button class="btn btn-danger btn-sm" data-community-delete="'+esc(x.id)+'" data-community-kind="'+x.kind+'">Delete</button></div></article>').join(''):'<div class="pane"><p class="sub">No feedback or referral submissions yet.</p></div>');
 }
+function tabMembers(){
+ const rows=M.members||[];
+ return `<div class="mhead"><div><h2>Members</h2><p class="sub">Every Google account that has created a Pinnacle Builds profile. Member IDs connect their commissions, referrals, and feedback.</p></div><button class="btn btn-plain btn-sm" type="button" id="members-refresh">Refresh</button></div>
+ <div class="pane"><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;text-align:left"><thead><tr><th style="padding:10px">Member</th><th style="padding:10px">Email</th><th style="padding:10px">Discord</th><th style="padding:10px">Commissions</th><th style="padding:10px">Community</th><th style="padding:10px">Member ID</th></tr></thead><tbody>${rows.length?rows.map(p=>`<tr style="border-top:1px solid #e3e6df"><td style="padding:10px"><b>${esc(p.displayName||p.name)}</b><small style="display:block;color:var(--muted)">Joined ${esc(shortDate(p.created))}</small></td><td style="padding:10px">${esc(p.email)}</td><td style="padding:10px">${esc(p.discord||'—')}</td><td style="padding:10px">${p.commissionCount||0}</td><td style="padding:10px">${p.communityCount||0}</td><td style="padding:10px;font-family:var(--pixel)">${esc(p.id)}</td></tr>`).join(''):'<tr><td colspan="6" style="padding:18px;color:var(--muted)">No member profiles yet.</td></tr>'}</tbody></table></div></div>`;
+}
 function tabBuilds(){
  const all = builds(true), b = M.edit === 'new' ? null : all.find(x => x.id === M.edit);
  return `<div class="mhead"><h2>Builds</h2><button class="btn btn-leaf btn-sm" type="button" id="b-new">${ic('plus')} New build</button></div>
@@ -1327,7 +1332,8 @@ document.addEventListener('click', async e => {
  if (t.id === 'signout') { signOut(); return; }
  if (t.id === 'member-signout') { memberSignOut(); return; }
  if (t.dataset.go) { navigate(t.dataset.go); return; }
- if (t.dataset.tab) { M.tab = t.dataset.tab; renderTab(); return; }
+ if (t.dataset.tab) { M.tab = t.dataset.tab; if(M.tab==='members') loadMembers().then(()=>renderTab()).catch(err=>say('mtab',err.message,true)); renderTab(); return; }
+ if (t.id === 'members-refresh') { await loadMembers(); renderTab(); return; }
  if (t.dataset.mailFolder) { M.mailFolder = t.dataset.mailFolder; M.sel = null; renderCommissionList(); return; }
  if (t.dataset.filter) { M.filter = t.dataset.filter; renderTab(); return; }
  if (t.dataset.rmCommissionImage) {
@@ -1439,8 +1445,9 @@ document.addEventListener('submit', async e => {
  if (f.id === 'nform') return act('n-msg', () => call('saveSettings', {settings:{notify:v('n-to'), confirm:$('#n-conf').checked ? 'true' : 'false'}}), 'Saved.');
 });
 
+async function loadMembers(){const r=await call('profiles');M.members=r.profiles||[];}
 async function openManager(){
- try { const r = await call('load'); applySite(r.site); M.comms = r.commissions || []; const cr=await call('community'); M.community=cr.community||{feedback:[],referrals:[]}; render(); }
+ try { const r = await call('load'); applySite(r.site); M.comms = r.commissions || []; const cr=await call('community'); M.community=cr.community||{feedback:[],referrals:[]}; await loadMembers(); render(); }
  catch (e) { if (!e.signedOut) { render(); say('l-msg', e.message, true); } }
 }
 

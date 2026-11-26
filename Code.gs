@@ -26,6 +26,8 @@ function setupSite() {
   ensureSheet_(ss, PB.COMMISSIONS, ['id','received','status','data','quote','notes','read','archived','thread']);
   ensureSheet_(ss, PB.BUILDS, ['id','data']);
   ensureSheet_(ss, PB.SETTINGS, ['key','value']);
+  ensureSheet_(ss, 'Feedback', ['id','created','displayName','avatarUrl','message','approved']);
+  ensureSheet_(ss, 'Referrals', ['id','created','displayName','avatarUrl','message','approved']);
   const props = PropertiesService.getScriptProperties();
   props.setProperty('PB_SPREADSHEET_ID', ss.getId());
 
@@ -80,6 +82,7 @@ function doPost(e) {
 function route_(req) {
   if (req.action === 'commission') return createCommission_(req);
   if (req.action === 'publicFeedback') return publicFeedback_(req);
+  if (req.action === 'publicReferral') return publicReferral_(req);
   if (req.action === 'googleLogin') return googleLogin_(req.credential);
   // Public read-only feed: exposes completed project details only, never customer contact data.
   if (req.action === 'publicCommissions') return publicCommissions_();
@@ -187,6 +190,8 @@ function requireAuth_(token) {
 
 function admin_(op, p) {
   if (op === 'load') return {site:siteData_(), commissions:commissions_()};
+  if (op === 'community') return {community:communitySubmissions_()};
+  if (op === 'moderateCommunity') return moderateCommunity_(p);
   if (op === 'commissions') return {commissions:commissions_()};
   if (op === 'updateCommission') {
     const c = findCommission_(p.id);
@@ -290,6 +295,7 @@ function publicSite_() {
   const s = siteData_();
   const settings = s.settings || {};
   return {settings:settings, featured:s.featured || [], builds:(s.builds || []).filter(b => !b.hidden),
+    community:publishedCommunity_(),
     googleClientId:String(PropertiesService.getScriptProperties().getProperty('PB_GOOGLE_CLIENT_ID') || '')};
 }
 
@@ -355,11 +361,49 @@ function removeCommissionImage_(p){
  const c=findCommission_(p.id);if(!c)throw new Error('Commission not found.');const arr=Array.isArray(c.completedGallery)?c.completedGallery:[];const f=arr.find(x=>String(x.id)===String(p.fileId));
  if(f){try{DriveApp.getFileById(f.id).setTrashed(true);}catch(e){}}c.completedGallery=arr.filter(x=>String(x.id)!==String(p.fileId));c.data=c.data||{};c.data.completedGallery=c.completedGallery;saveCommission_(c);return {commissions:commissions_()};
 }
-function publicFeedback_(req){
- const d=req.data||{},name=String(d.displayName||'').trim().slice(0,60),message=String(d.message||'').trim().slice(0,1200);if(!name||!message)throw new Error('Add a display name and feedback first.');
- let avatar='';if(d.avatarData)avatar=savePublicImage_(d.avatarData,'feedback-'+Utilities.getUuid().slice(0,8)+'.jpg').url;
- const ss=SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('PB_SPREADSHEET_ID'));const sh=ensureSheet_(ss,'Feedback',['id','created','displayName','avatarUrl','message','approved']);
- const id='FB-'+Utilities.getUuid().slice(0,8).toUpperCase();sh.appendRow([id,new Date().toISOString(),name,avatar,message,false]);return {ok:true,message:'Thanks! Your feedback was sent for review.'};
+function publicFeedback_(req){ return saveCommunitySubmission_('Feedback', req); }
+function publicReferral_(req){ return saveCommunitySubmission_('Referrals', req); }
+function saveCommunitySubmission_(kind, req){
+  const d=req.data||{}, name=String(d.displayName||'').trim().slice(0,60), message=String(d.message||'').trim().slice(0,1200);
+  if(String(req.hp||'').trim()) throw new Error('Request could not be accepted.');
+  if(!name||!message) throw new Error('Add a display name and a message first.');
+  let avatar='';
+  if(d.avatarData){
+    if(String(d.avatarData).length>4*1024*1024) throw new Error('Profile picture is too large. Choose a smaller image.');
+    avatar=savePublicImage_(d.avatarData,kind.toLowerCase()+'-'+Utilities.getUuid().slice(0,8)+'.jpg').url;
+  }
+  const ss=SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('PB_SPREADSHEET_ID'));
+  const sh=ensureSheet_(ss,kind,['id','created','displayName','avatarUrl','message','approved']);
+  const id=(kind==='Feedback'?'FB-':'RF-')+Utilities.getUuid().slice(0,8).toUpperCase();
+  sh.appendRow([id,new Date().toISOString(),name,avatar,message,false]);
+  return {ok:true,id:id,message:'Thanks! Your submission was sent for review.'};
+}
+function readCommunitySheet_(kind){
+  const ss=SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('PB_SPREADSHEET_ID'));
+  const sh=ensureSheet_(ss,kind,['id','created','displayName','avatarUrl','message','approved']);
+  const values=sh.getDataRange().getValues(),out=[];
+  for(let i=1;i<values.length;i++){
+    if(!values[i][0])continue;
+    out.push({id:String(values[i][0]),created:String(values[i][1]||''),displayName:String(values[i][2]||'Visitor'),
+      avatarUrl:String(values[i][3]||''),message:String(values[i][4]||''),approved:values[i][5]===true||String(values[i][5])==='true',kind:kind==='Feedback'?'feedback':'referral'});
+  }
+  return out.reverse();
+}
+function communitySubmissions_(){return {feedback:readCommunitySheet_('Feedback'),referrals:readCommunitySheet_('Referrals')};}
+function publishedCommunity_(){
+  const c=communitySubmissions_();
+  return {feedback:c.feedback.filter(x=>x.approved),referrals:c.referrals.filter(x=>x.approved)};
+}
+function moderateCommunity_(p){
+  const kind=p.kind==='referral'?'Referrals':p.kind==='feedback'?'Feedback':'';
+  if(!kind)throw new Error('Unknown submission type.');
+  const sh=sheet_(kind),values=sh.getDataRange().getValues();
+  for(let i=1;i<values.length;i++)if(String(values[i][0])===String(p.id)){
+    if(p.remove===true){sh.deleteRow(i+1);return {community:communitySubmissions_()};}
+    sh.getRange(i+1,6).setValue(!!p.approved);
+    return {community:communitySubmissions_()};
+  }
+  throw new Error('Submission not found.');
 }
 
 function findCommission_(id) {

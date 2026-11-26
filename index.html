@@ -1406,14 +1406,13 @@ document.addEventListener('submit', async e => {
  if (f.id === 'feedback-form' || f.id === 'referral-form') {
   const feedback=f.id==='feedback-form', prefix=feedback?'fb':'rf', msg=$('#'+prefix+'-msg'), btn=f.querySelector('button[type="submit"]');
   const say=(t,err)=>{msg.textContent=t;msg.classList.toggle('err',!!err);};
-  const file=$('#'+prefix+'-avatar').files[0];
-  if(file&&file.size>3*1048576){say('Profile picture must be 3 MB or smaller.',true);return;}
+  if(!M.userToken){say('Please sign in to submit this.',true);return;}
   if(!CONNECTED){say('The form is not connected yet.',true);return;}
-  const data={displayName:$('#'+prefix+'-name').value.trim(),message:$('#'+prefix+'-message').value.trim()};
-  if(!data.displayName||!data.message){say('Add your display name and message first.',true);return;}
+  const data={displayName:M.userProfile.displayName,message:$('#'+prefix+'-message').value.trim()};
+  if(!data.message){say('Add a message first.',true);return;}
   btn.disabled=true;say('Sending…');
-  try{if(file){const enc=await fileToBase64(file,true);data.avatarData=enc.data;}
-   const r=await post({action:feedback?'publicFeedback':'publicReferral',data,hp:$('#'+prefix+'-hp').value});
+  try{
+   const r=await post({action:feedback?'publicFeedback':'publicReferral',userToken:M.userToken,data,hp:$('#'+prefix+'-hp').value});
    say(r.message||'Sent for review.');f.reset();
   }catch(err){say(err.message||'Could not send. Try again.',true);}
   finally{btn.disabled=false;}
@@ -1489,6 +1488,7 @@ addEventListener('popstate', fromUrl);
 addEventListener('hashchange', fromUrl);
 
 renderChrome(); render();
+if(M.userToken) loadMemberAccount().then(()=>{if(HASH==='account')render();renderChrome();}).catch(()=>{});
 { const h = HASH; if (SECTIONS.includes(h)) { const t = document.getElementById(h); if (t) setTimeout(() => t.scrollIntoView(), 50); } }
 if (M.token && CONNECTED) openManager();
 loadSite();

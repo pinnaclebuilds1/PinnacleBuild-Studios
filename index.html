@@ -986,7 +986,7 @@ function viewManager(){
  }
  const newCount = M.comms.filter(c => !c.read && !c.archived).length;
  const doneCount = M.comms.filter(c => !c.archived && c.status === 'Done').length;
- const tabs = [['inbox','inbox','Commissions', newCount], ['done','check-circle','Done Commissions', doneCount], ['builds','cube','Builds'], ['home','home','Homepage'], ['settings','gear','Settings']];
+ const tabs = [['inbox','inbox','Commissions', newCount], ['done','check-circle','Done Commissions', doneCount], ['builds','cube','Builds'], ['home','home','Homepage'], ['settings','gear','Settings'], ['knowledge','brain','AI Knowledge Base']];
  return `<div class="mgr"><nav class="rail" aria-label="Manager">
   <p class="who">Signed in as owner</p>
   ${tabs.map(([k, i, l, n]) => `<button type="button" data-tab="${k}" aria-current="${M.tab === k}">${ic(i)} ${l}${n ? `<span class="count">${n}</span>` : ''}</button>`).join('')}
@@ -995,7 +995,7 @@ function viewManager(){
 }
 function renderTab(){
  const el = $('#mtab'); if (!el) return;
- el.innerHTML = ({inbox:tabInbox, done:tabDoneCommissions, builds:tabBuilds, home:tabHome, settings:tabSettings})[M.tab]();
+ el.innerHTML = ({inbox:tabInbox, done:tabDoneCommissions, builds:tabBuilds, home:tabHome, settings:tabSettings, knowledge:tabKnowledge})[M.tab]();
  $$('[data-tab]').forEach(b => b.setAttribute('aria-current', b.dataset.tab === M.tab));
  const n = M.comms.filter(c => !c.read && !c.archived).length, badge = $('[data-tab="inbox"] .count');
  if (badge) badge.textContent = n; else if (n) $('[data-tab="inbox"]').insertAdjacentHTML('beforeend', `<span class="count">${n}</span>`);
@@ -1094,7 +1094,8 @@ function viewCommissionList(){
    <p class="public-status">${esc(statusText)}</p>
   </div>
   <div class="mail-detail">${c ? publicCommissionPane(c) : `<div class="pane mail-placeholder"><div class="mail-placeholder-icon">${ic('check-circle')}</div><h3>Explore completed work</h3><p>Select a completed commission to read its project details. Customer contact information and private manager notes are never displayed.</p></div>`}</div>
- </div></section>`;
+ </div></section>
+ <div class="wrap" style="padding:0 0 32px;text-align:center"><a class="link" href="#manager">Studio sign in</a></div>`;
 }
 function renderCommissionList(){
  const el = $('#main'); if (!el) return;
@@ -1186,6 +1187,17 @@ function tabSettings(){
 </div>`;
 }
 
+
+function tabKnowledge(){
+ const approved = (() => { try { return JSON.parse(S().aiApprovedCommissions || '[]'); } catch(e) { return []; } })();
+ const done = M.comms.filter(c => c.status === 'Done' && !c.archived);
+ return `<div class="mhead"><div><h2>AI Knowledge Base</h2><p style="color:var(--muted);margin-top:5px">Choose which finished projects may be used as public examples. Private customer details and notes are never shared.</p></div></div>
+ <div class="pane"><h3>Public AI training examples</h3><p class="sub">Only checked completed commissions are approved. Historical prices are not public unless a separate public price is explicitly added to a project record.</p>
+ <div style="display:grid;gap:10px;margin:18px 0">${done.length ? done.map(c=>`<label class="check"><input type="checkbox" data-ai-approve="${esc(c.id)}" ${approved.includes(c.id)?'checked':''}> <span><b>${esc(c.type || 'Minecraft build')}</b> — ${esc(c.size || 'Size not recorded')}<small style="display:block;color:var(--muted)">${esc(c.id)} · ${esc(c.idea || '')}</small></span></label>`).join('') : '<p style="color:var(--muted)">No completed commissions yet. Mark a commission Done before approving it here.</p>'}</div>
+ <div class="row-end"><button class="btn btn-moss btn-sm" type="button" id="save-ai-knowledge">Save approved projects</button><p class="msg" id="ai-kb-msg" role="status"></p></div></div>
+ <div class="pane" style="margin-top:14px"><h3>AI assistants</h3><p class="sub">The public and owner chat interfaces can be enabled after an adult-managed API connection is configured securely in Google Apps Script. No API key is stored in this website.</p><p class="msg">Connection status: API key not configured in this setup branch.</p></div>`;
+}
+
 /* manager events */
 const say = (id, t, err) => { const m = $('#' + id); if (m) { m.textContent = t; m.classList.toggle('err', !!err); } };
 async function act(msgId, fn, okText){
@@ -1218,6 +1230,7 @@ document.addEventListener('click', async e => {
  if (t.dataset.tab) { M.tab = t.dataset.tab; renderTab(); return; }
  if (t.dataset.mailFolder) { M.mailFolder = t.dataset.mailFolder; M.sel = null; renderCommissionList(); return; }
  if (t.dataset.filter) { M.filter = t.dataset.filter; renderTab(); return; }
+ if (t.id === 'save-ai-knowledge') { const approved = $('[data-ai-approve]:checked').map(x => x.dataset.aiApprove); await act('ai-kb-msg', () => call('saveSettings', {settings:{aiApprovedCommissions:JSON.stringify(approved)}}), 'Saved. The public AI may reference only these approved projects.'); return; }
  if (t.id === 'public-refresh') { M.publicLoaded = false; M.publicError = ''; await loadPublicCommissions(); return; }
  if (t.dataset.publicSel) { M.publicSel = t.dataset.publicSel; renderCommissionList(); return; }
  if (t.id === 'refresh') { await act('u-msg', () => call('commissions'), ''); return; }

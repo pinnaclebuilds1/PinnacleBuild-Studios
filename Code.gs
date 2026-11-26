@@ -79,6 +79,7 @@ function doPost(e) {
 // Script Properties (OPENAI_API_KEY / OPENAI_MODEL), never in index.html.
 function route_(req) {
   if (req.action === 'commission') return createCommission_(req);
+  if (req.action === 'publicFeedback') return publicFeedback_(req);
   if (req.action === 'googleLogin') return googleLogin_(req.credential);
   // Public read-only feed: exposes completed project details only, never customer contact data.
   if (req.action === 'publicCommissions') return publicCommissions_();
@@ -98,6 +99,12 @@ function createCommission_(req) {
   });
   if (!/^[a-z0-9._%+-]+@(gmail|googlemail)\.com$/i.test(String(d.gmail))) {
     throw new Error('Please use a Gmail address.');
+  }
+  d.publicName = String(d.publicName || d.name || '').trim().slice(0,60);
+  if (d.avatarData) {
+    if (String(d.avatarData).length > 4 * 1024 * 1024) throw new Error('Profile picture is too large. Choose a smaller image.');
+    const avatar = savePublicImage_(d.avatarData, 'profile-' + Utilities.getUuid().slice(0,8) + '.jpg');
+    d.avatarUrl = avatar.url; delete d.avatarData;
   }
   const id = 'PB-' + Utilities.getUuid().slice(0,8).toUpperCase();
   const received = new Date().toISOString();
@@ -189,6 +196,8 @@ function admin_(op, p) {
     if (p.notes !== undefined) c.notes = p.notes;
     if (p.read !== undefined) c.read = !!p.read;
     if (p.archived !== undefined) c.archived = !!p.archived;
+    ['publicName','queuePosition','estimatedStart','completedTitle','completedPrice','completedSize','completedBlocks','completedTime','completedDetails'].forEach(k => { if (p[k] !== undefined) c[k] = String(p[k] == null ? '' : p[k]); });
+    if (p.queueVisible !== undefined) c.queueVisible = !!p.queueVisible;
     saveCommission_(c);
     return {commissions:commissions_()};
   }
@@ -227,6 +236,8 @@ function admin_(op, p) {
   }
   if (op === 'upload') return upload_(p);
   if (op === 'removeFile') return removeFile_(p);
+  if (op === 'uploadCommissionImage') return uploadCommissionImage_(p);
+  if (op === 'removeCommissionImage') return removeCommissionImage_(p);
   if (op === 'saveSettings') {
     Object.keys(p.settings || {}).forEach(k => writeSetting_(k, p.settings[k]));
     return {site:siteData_()};
@@ -313,20 +324,40 @@ function commissions_() {
 // Safe public projection of completed commissions. Do not return name, Gmail,
 // Discord, private notes, quote, email thread, or the original data object.
 function publicCommissions_() {
-  return {commissions: commissions_()
-    .filter(c => String(c.status).toLowerCase() === 'done' && !c.archived)
-    .map(c => ({
-      id: String(c.id || ''),
-      received: c.received || '',
-      status: 'Done',
-      type: String(c.type || ''),
-      platform: String(c.platform || ''),
-      size: String(c.size || ''),
-      budget: String(c.budget || ''),
-      deadline: String(c.deadline || ''),
-      idea: String(c.idea || ''),
-      refs: String(c.refs || '')
-    }))};
+  const rows=commissions_().filter(c=>!c.archived);
+  const done=rows.filter(c=>String(c.status).toLowerCase()==='done').map(c=>({
+    id:String(c.id||''),received:c.received||'',status:'Done',publicName:String(c.publicName||c.name||'Minecraft builder'),avatarUrl:String(c.avatarUrl||''),
+    title:String(c.completedTitle||c.type||'Minecraft build'),type:String(c.type||''),platform:String(c.platform||''),size:String(c.completedSize||c.size||''),
+    budget:String(c.budget||''),deadline:String(c.deadline||''),idea:String(c.idea||''),refs:String(c.refs||''),completedPrice:String(c.completedPrice||''),
+    completedBlocks:String(c.completedBlocks||''),completedTime:String(c.completedTime||''),completedDetails:String(c.completedDetails||''),
+    gallery:Array.isArray(c.completedGallery)?c.completedGallery.map(x=>({id:String(x.id||''),url:String(x.url||'')})).filter(x=>/^https:\/\//i.test(x.url)):[]
+  }));
+  const queue=rows.filter(c=>!['done','declined'].includes(String(c.status).toLowerCase())&&c.queueVisible!==false)
+    .sort((a,b)=>(Number(a.queuePosition)||9999)-(Number(b.queuePosition)||9999)||new Date(a.received)-new Date(b.received))
+    .map((c,i)=>({displayName:String(c.publicName||c.name||'Commission'),avatarUrl:String(c.avatarUrl||''),position:Number(c.queuePosition)||i+1,estimatedStart:String(c.estimatedStart||''),status:String(c.status||'Received'),type:String(c.type||'Minecraft build')}));
+  return {commissions:done,queue:queue};
+}
+function savePublicImage_(base64,name){
+ const folderId=PropertiesService.getScriptProperties().getProperty('PB_FOLDER_ID'); if(!folderId) throw new Error('Upload folder is not set up. Run setupSite first.');
+ const bytes=Utilities.base64Decode(String(base64).replace(/^data:[^,]+,/,''));
+ const file=DriveApp.getFolderById(folderId).createFile(Utilities.newBlob(bytes,'image/jpeg',name));
+ file.setSharing(DriveApp.Access.ANYONE_WITH_LINK,DriveApp.Permission.VIEW);
+ return {id:file.getId(),url:'https://drive.google.com/uc?export=view&id='+file.getId()};
+}
+function uploadCommissionImage_(p){
+ const c=findCommission_(p.id);if(!c)throw new Error('Commission not found.');if(String(c.status).toLowerCase()!=='done')throw new Error('Only completed commissions can have public pictures.');
+ if(String(p.data||'').length>40*1024*1024)throw new Error('Image is too large.');
+ const f=savePublicImage_(p.data,String(p.name||'completed-build.jpg'));c.completedGallery=Array.isArray(c.completedGallery)?c.completedGallery:[];c.completedGallery.push(f);saveCommission_(c);return {commissions:commissions_()};
+}
+function removeCommissionImage_(p){
+ const c=findCommission_(p.id);if(!c)throw new Error('Commission not found.');const arr=Array.isArray(c.completedGallery)?c.completedGallery:[];const f=arr.find(x=>String(x.id)===String(p.fileId));
+ if(f){try{DriveApp.getFileById(f.id).setTrashed(true);}catch(e){}}c.completedGallery=arr.filter(x=>String(x.id)!==String(p.fileId));saveCommission_(c);return {commissions:commissions_()};
+}
+function publicFeedback_(req){
+ const d=req.data||{},name=String(d.displayName||'').trim().slice(0,60),message=String(d.message||'').trim().slice(0,1200);if(!name||!message)throw new Error('Add a display name and feedback first.');
+ let avatar='';if(d.avatarData)avatar=savePublicImage_(d.avatarData,'feedback-'+Utilities.getUuid().slice(0,8)+'.jpg').url;
+ const ss=SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('PB_SPREADSHEET_ID'));const sh=ensureSheet_(ss,'Feedback',['id','created','displayName','avatarUrl','message','approved']);
+ const id='FB-'+Utilities.getUuid().slice(0,8).toUpperCase();sh.appendRow([id,new Date().toISOString(),name,avatar,message,false]);return {ok:true,message:'Thanks! Your feedback was sent for review.'};
 }
 
 function findCommission_(id) {

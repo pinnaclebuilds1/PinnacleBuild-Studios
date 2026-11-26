@@ -116,7 +116,11 @@ h2 span{display:block;color:var(--moss)}.dark h2 span{color:var(--leaf)}
 .feat{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);grid-template-rows:repeat(2,minmax(270px,1fr));gap:20px}
 .tile{position:relative;display:block;border-radius:10px;overflow:hidden;background:#20262a;text-decoration:none;color:#fff;min-height:270px;box-shadow:0 22px 36px -28px #2b2414}
 .tile:first-child{grid-row:span 2;min-height:560px}
-.tile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .6s ease}
+.tile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .6s ease,opacity 1s ease}
+.tile.rotating-out img,.tile.rotating-out .tile-body,.tile.rotating-out>.badge{opacity:0}
+.tile.rotating-in img,.tile.rotating-in .tile-body,.tile.rotating-in>.badge{animation:featuredFadeIn 1s ease both}
+@keyframes featuredFadeIn{from{opacity:0}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){.tile img,.tile-body,.tile>.badge{transition:none!important;animation:none!important}.tile.rotating-out img,.tile.rotating-out .tile-body,.tile.rotating-out>.badge{opacity:1}} 
 .tile:hover img{transform:scale(1.045)}
 .tile::after{content:"";position:absolute;inset:0;background:linear-gradient(0deg,#08130ceb 0,#08130c99 36%,#08130c00 66%)}
 .tile-body{position:absolute;left:0;right:0;bottom:0;z-index:1;padding:22px 24px}
@@ -731,6 +735,7 @@ function featured(){
   if (ids.length < 3 && !ids.includes(id) && list.some(b => b.id === id)) ids.push(id);
  return ids.map(id => list.find(b => b.id === id));
 }
+function featuredTile(b,i){ return `<a class="tile" data-featured-slot="${i}" href="#build-${esc(b.id)}"><img src="${esc(imgOk(b.cover))}" alt="${esc(b.title)}" loading="lazy"${b.pos ? ` style="object-position:${b.pos}"` : ''}><span class="badge">Studio Favorite ${i + 1}</span><div class="tile-body">${b.category ? `<p class="cat">${esc(b.category)}</p>` : ''}<h3>${esc(b.title)}</h3>${b.tagline ? `<p>${esc(b.tagline)}</p>` : ''}<div class="chips">${statChips(b)}<span class="chip">View build ${ic('arrow')}</span></div></div></a>`; }
 function statChips(b){
  return [b.time && `<span class="chip">${ic('clock')} ${esc(b.time)}</span>`, b.blocks && `<span class="chip">${ic('cube')} ${esc(b.blocks)} blocks</span>`].filter(Boolean).join('');
 }
@@ -770,9 +775,8 @@ function viewHome(){
  </section>
  <section class="sec cream edge-c" id="featured">
   <div class="wrap">
-   <div class="sec-head"><div><p class="label">From the Vault</p><h2>Handpicked builds.</h2><p class="intro">A few favorites from the studio. Open one to see the full build, the details, and any downloads.</p></div><a class="btn btn-moss" href="#vault">See every build ${ic('arrow')}</a></div>
-   <div class="feat">${f.map((b, i) => `<a class="tile" href="#build-${esc(b.id)}"><img src="${esc(imgOk(b.cover))}" alt="${esc(b.title)}" loading="lazy"${b.pos ? ` style="object-position:${b.pos}"` : ''}><span class="badge">Featured ${i + 1}</span>
-    <div class="tile-body">${b.category ? `<p class="cat">${esc(b.category)}</p>` : ''}<h3>${esc(b.title)}</h3>${b.tagline ? `<p>${esc(b.tagline)}</p>` : ''}<div class="chips">${statChips(b)}<span class="chip">View build ${ic('arrow')}</span></div></div></a>`).join('')}</div>
+   <div class="sec-head"><div><p class="label">Studio Showcase</p><h2>Pinnacle Studios Builds.</h2><p class="intro">A few of my favorite builds are featured here. Open one to see the full build, the details, and any downloads.</p></div><a class="btn btn-moss" href="#vault">See every build ${ic('arrow')}</a></div>
+   <div class="feat" id="featured-tiles">${f.map((b, i) => featuredTile(b, i)).join('')}</div>
   </div>
  </section>
  <section class="sec dark edge-d" id="how">
@@ -809,7 +813,26 @@ function viewHome(){
   </div>
  </section>`;
 }
+let featuredTimer = null;
+function rotateFeatured(){
+ const host=$('#featured-tiles'); if(!host)return;
+ const list=builds(false); if(list.length<3)return;
+ let cursor=list.findIndex(b=>b.id===featured()[0]?.id); if(cursor<0)cursor=0;
+ featuredTimer=setInterval(()=>{
+  const tiles=$('#featured-tiles [data-featured-slot]'); if(tiles.length!==3)return;
+  cursor=(cursor+1)%list.length;
+  const next=[0,1,2].map(i=>list[(cursor+i)%list.length]);
+  tiles.forEach((tile,i)=>tile.classList.add('rotating-out'));
+  setTimeout(()=>{
+   const live=$('#featured-tiles [data-featured-slot]');
+   live.forEach((tile,i)=>{tile.outerHTML=featuredTile(next[i],i).replace('<a class="tile"','<a class="tile rotating-in"');});
+   setTimeout(()=>$('#featured-tiles .rotating-in').forEach(tile=>tile.classList.remove('rotating-in')),1050);
+  },1000);
+ },10000);
+}
 function afterHome(){
+ if(featuredTimer){clearInterval(featuredTimer);featuredTimer=null;}
+ rotateFeatured();
  const bar = $('#xpbar'); if (!bar) return;
  if (!('IntersectionObserver' in window)) { bar.classList.add('on'); return; }
  const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { bar.classList.add('on'); io.disconnect(); } }, {threshold:.4});
@@ -1456,6 +1479,7 @@ let currentView = '';
 let HASH = (() => { try { return decodeURIComponent(location.hash.slice(1)); } catch { return ''; } })();
 const SECTIONS = ['how','socials','featured','referrals'];
 function render(){
+ if(featuredTimer){clearInterval(featuredTimer);featuredTimer=null;}
  const h = HASH;
  const view = h === 'vault' ? 'vault' : h.startsWith('build-') ? 'build' : h === 'commission' ? 'commission' : h === 'commission-list' ? 'commission-list' : h === 'manager' ? 'manager' : h === 'account' ? 'account' : 'home';
  if (view !== 'build') gIndex = 0;

@@ -222,6 +222,20 @@ function requireProfile_(token) {
   const err = new Error('Your profile could not be found. Please sign in again.'); err.signedOut = true; throw err;
 }
 
+function profiles_() {
+  const sh=sheet_('Profiles'), values=sh.getDataRange().getValues(), rows=[];
+  const commissions=commissions_(), community=communitySubmissions_();
+  for(let i=1;i<values.length;i++){
+    if(!values[i][0])continue;
+    const p=publicProfile_(values[i]);
+    rows.push(Object.assign(p,{
+      commissionCount:commissions.filter(c=>String(c.profileId||'')===p.id).length,
+      communityCount:community.feedback.concat(community.referrals).filter(x=>x.profileId===p.id).length
+    }));
+  }
+  return rows.reverse();
+}
+
 function profileGet_(token) {
   const profile = requireProfile_(token);
   const commissions = commissions_().filter(c => String(c.profileId || '') === profile.id)
@@ -257,6 +271,7 @@ function requireAuth_(token) {
 function admin_(op, p) {
   if (op === 'load') return {site:siteData_(), commissions:commissions_()};
   if (op === 'community') return {community:communitySubmissions_()};
+  if (op === 'profiles') return {profiles:profiles_()};
   if (op === 'moderateCommunity') return moderateCommunity_(p);
   if (op === 'commissions') return {commissions:commissions_()};
   if (op === 'updateCommission') {

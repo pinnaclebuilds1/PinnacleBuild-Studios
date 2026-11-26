@@ -920,8 +920,8 @@ async function loadSite(){
 /* =========================================================
    STUDIO MANAGER (password protected; changes save to your Google Sheet)
    ========================================================= */
-const M = {token:null, demo:false, tab:'inbox', comms:[], sel:null, filter:'active', q:'', mailFolder:'inbox', mailQ:'', publicComms:[], publicQueue:[], publicSel:null, publicLoaded:false, publicLoading:false, publicError:'', edit:null, ownerEmail:''};
-try { M.token = sessionStorage.getItem('pb_token'); } catch {}
+const M = {token:null, demo:false, tab:'inbox', comms:[], sel:null, filter:'active', q:'', mailFolder:'inbox', mailQ:'', publicComms:[], publicQueue:[], publicSel:null, publicLoaded:false, publicLoading:false, publicError:'', edit:null, ownerEmail:'', profile:null};
+try { M.token = sessionStorage.getItem('pb_token'); M.profile = JSON.parse(sessionStorage.getItem('pb_profile') || 'null'); } catch {}
 const SAMPLE = () => [
  {id:'PB-1003', received:new Date(Date.now() - 36e5).toISOString(), status:'New', name:'Sample: Alex', gmail:'alex.sample@gmail.com', discord:'alex_builds', type:'Creature or dragon', platform:'Xbox', size:'About 60 blocks long', budget:'$30', deadline:'', idea:'A Night Fury perched on a cliff, wings half open. (This is sample data so you can try the manager.)', refs:'', quote:'', notes:'', read:false, archived:false, thread:[]},
  {id:'PB-1002', received:new Date(Date.now() - 864e5 * 2).toISOString(), status:'Quoted', name:'Sample: Jordan', gmail:'jordan.sample@gmail.com', discord:'jordo', type:'House or building', platform:'Windows / PC', size:'Two-story house', budget:'Not sure', deadline:'', idea:'A cozy wizard tower with a library inside. (Sample data.)', refs:'', quote:'$45', notes:'Asked for reference pictures.', read:true, archived:false, thread:[{at:new Date(Date.now() - 864e5).toISOString(), subject:'Re: your wizard tower', text:'Hey Jordan! A tower like that would be about $45. Do you have pictures of the style you like?'}]},
@@ -950,7 +950,7 @@ function demoCall(op, p){
  return done();
 }
 function applySite(site){ if (site) { remote = {settings:site.settings || {}, featured:site.featured || [], builds:site.builds || []}; M.ownerEmail = (site.settings && (site.settings.notify || site.settings.ownerEmail)) || M.ownerEmail; renderChrome(); } }
-function signOut(note){ M.token = null; M.demo = false; try { sessionStorage.removeItem('pb_token'); } catch {} render(); if (note) { const m = $('#l-msg'); if (m) { m.textContent = note; m.classList.add('err'); } } }
+function signOut(note){ M.token = null; M.demo = false; M.profile = null; try { sessionStorage.removeItem('pb_token'); sessionStorage.removeItem('pb_profile'); } catch {} render(); if (note) { const m = $('#l-msg'); if (m) { m.textContent = note; m.classList.add('err'); } } }
 
 function renderGoogleSignIn(attempt) {
  attempt = attempt || 0;
@@ -972,7 +972,8 @@ async function handleGoogleCredential(response) {
  try {
   const result = await post({action:'googleLogin', credential:response.credential});
   M.token = result.token;
-  try { sessionStorage.setItem('pb_token', result.token); } catch {}
+  try { const claims = JSON.parse(atob(response.credential.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); M.profile = {name:String(claims.name || result.email), picture: /^https:\/\//i.test(String(claims.picture || '')) ? String(claims.picture) : '', email:String(result.email || '')}; } catch { M.profile = {name:String(result.email || 'Owner account'), picture:'', email:String(result.email || '')}; }
+  try { sessionStorage.setItem('pb_token', result.token); sessionStorage.setItem('pb_profile', JSON.stringify(M.profile)); } catch {}
   await openManager();
  } catch (err) { say('l-msg', err.message || 'Google sign-in failed.', true); }
 }
@@ -993,7 +994,7 @@ function viewManager(){
  const doneCount = M.comms.filter(c => !c.archived && c.status === 'Done').length;
  const tabs = [['inbox','inbox','Commissions', newCount], ['done','check-circle','Done Commissions', doneCount], ['builds','cube','Builds'], ['home','home','Homepage'], ['settings','gear','Settings'], ['knowledge','brain','AI Knowledge Base']];
  return `<div class="mgr"><nav class="rail" aria-label="Manager">
-  <p class="who">Signed in as owner</p>
+  <div class="who" style="display:flex;align-items:center;gap:9px">${M.profile && M.profile.picture ? `<img src="${esc(M.profile.picture)}" alt="" referrerpolicy="no-referrer" style="width:30px;height:30px;border-radius:50%;object-fit:cover">` : `<span style="width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--leaf);color:white">${esc(String(M.profile && M.profile.name || 'P').slice(0,1).toUpperCase())}</span>`}<span>${esc(M.profile && M.profile.name || 'Studio owner')}</span></div>
   ${tabs.map(([k, i, l, n]) => `<button type="button" data-tab="${k}" aria-current="${M.tab === k}">${ic(i)} ${l}${n ? `<span class="count">${n}</span>` : ''}</button>`).join('')}
   <span class="spacer"></span><button type="button" data-go="home">${ic('left')} View site</button><button type="button" id="signout">${ic('out')} Sign out</button>
  </nav><div class="mmain" id="mmain">${M.demo ? `<p class="banner">Preview with sample data. Nothing here is saved, and no emails are sent.</p>` : ''}<div id="mtab"></div></div></div>`;

@@ -243,6 +243,18 @@ input[type=checkbox]{width:22px;min-height:22px;accent-color:var(--moss)}
 .steps p{color:var(--muted);font-size:15px}
 .tips{margin:12px 0 0;padding-left:20px;color:var(--muted);font-size:15px;display:grid;gap:6px}
 
+/* community and moderation */
+.community-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:20px;align-items:start}
+.community-panel{background:#fff;border:1px solid var(--line);border-radius:10px;padding:clamp(16px,2.5vw,24px);display:grid;gap:14px}
+.community-panel h3{font-size:26px}
+.community-form{border-top:1px solid var(--line);padding-top:16px;display:grid;gap:12px}
+.community-form h4{font:700 17px var(--pixel);color:var(--moss)}
+.community-empty{color:var(--muted);padding:12px 0}
+.community-card{display:flex;gap:12px;align-items:flex-start;padding:12px;border:1px solid #e4e8df;border-radius:8px;background:#f8faf6}
+.community-card img,.community-avatar{width:42px;height:42px;flex:none;border-radius:50%;object-fit:cover;background:#e3eddf;display:grid;place-items:center;font-weight:800;color:var(--moss)}
+.community-card b{display:block}.community-card p{white-space:pre-wrap;font-size:15px;margin-top:4px}
+.community-review{margin-bottom:12px}.community-review .idea{margin-top:14px}
+@media(max-width:800px){.community-grid{grid-template-columns:1fr}}
 /* manager */
 .mgr{display:grid;grid-template-columns:236px minmax(0,1fr);min-height:calc(100vh - 80px);background:#eef0ea}
 .rail{background:var(--night);color:#fff;padding:20px 14px;display:flex;flex-direction:column;gap:4px}
@@ -661,7 +673,7 @@ const STATUSES = ['New','Reviewing','Quoted','Accepted','In progress','Done','De
 const BUILD_TYPES = ['Creature or dragon','House or building','Castle or fortress','Village or city','Terrain or landscape','Statue or sculpture','Something else'];
 const PLATFORMS = ['Not sure yet','Windows / PC','Xbox','PlayStation','Nintendo Switch','Mobile (iOS / Android)','Realm or server'];
 
-let remote = {settings:{}, featured:[], builds:[]};
+let remote = {settings:{}, featured:[], builds:[], community:{feedback:[],referrals:[]}};
 let faFailed = false;
 
 /* ---------- helpers ---------- */
@@ -728,6 +740,10 @@ function renderChrome(){
 }
 
 /* ---------- home ---------- */
+function renderCommunityCards(items, kind){
+ if(!Array.isArray(items)||!items.length)return '<p class="community-empty">No '+(kind==='feedback'?'feedback':'referrals')+' published yet.</p>';
+ return items.map(x=>'<article class="community-card">'+(x.avatarUrl&&https(x.avatarUrl)?'<img src="'+esc(imgOk(x.avatarUrl))+'" alt="" loading="lazy">':'<span class="community-avatar">'+esc(String(x.displayName||'V').slice(0,1).toUpperCase())+'</span>')+'<div><b>'+esc(x.displayName||'Visitor')+'</b><p>'+esc(x.message||'')+'</p></div></article>').join('');
+}
 function viewHome(){
  const s = S(), open = s.open !== 'false', f = featured(), hero = builds(false).find(b => b.id === 'deadly-nadder') || f[0];
  return `<section class="hero" id="home">
@@ -771,7 +787,14 @@ function viewHome(){
    </div>
    <div class="two" id="referrals" style="margin-top:clamp(56px,7vw,96px)">
     <div><p class="label">Client referrals</p><h2>From the people<span>I build for.</span></h2></div>
-    <div class="empty">${ic('users')}<div><h3>No referrals published yet</h3><p>Client feedback will show up here once clients agree to share it.</p></div></div>
+    <div class="community-grid">
+     <section class="community-panel"><h3>Client feedback</h3><div id="public-feedback-list">${renderCommunityCards(remote.community && remote.community.feedback || [], 'feedback')}</div>
+      <form class="community-form" id="feedback-form"><h4>Leave feedback</h4><label class="f">Display name<input id="fb-name" maxlength="60" required placeholder="The name people will see"></label><label class="f">Profile picture <em>optional</em><input id="fb-avatar" type="file" accept="image/*"></label><label class="f">Your feedback<textarea id="fb-message" maxlength="1200" required placeholder="How was your experience?"></textarea></label><label class="hp" aria-hidden="true">Leave this empty<input id="fb-hp" tabindex="-1" autocomplete="off"></label><button class="btn btn-moss btn-sm" type="submit">Send feedback</button><p class="msg" id="fb-msg" role="status">Submissions are reviewed before appearing publicly.</p></form>
+     </section>
+     <section class="community-panel"><h3>Referrals</h3><div id="public-referral-list">${renderCommunityCards(remote.community && remote.community.referrals || [], 'referral')}</div>
+      <form class="community-form" id="referral-form"><h4>Refer someone</h4><label class="f">Display name<input id="rf-name" maxlength="60" required placeholder="The name people will see"></label><label class="f">Profile picture <em>optional</em><input id="rf-avatar" type="file" accept="image/*"></label><label class="f">Who are you referring, and why?<textarea id="rf-message" maxlength="1200" required placeholder="Share their name or Minecraft username and a little context."></textarea></label><label class="hp" aria-hidden="true">Leave this empty<input id="rf-hp" tabindex="-1" autocomplete="off"></label><button class="btn btn-moss btn-sm" type="submit">Send referral</button><p class="msg" id="rf-msg" role="status">Referrals are reviewed before appearing publicly.</p></form>
+     </section>
+    </div>
    </div>
   </div>
  </section>`;
@@ -856,6 +879,8 @@ function viewCommission(){
  else if (!open) main = `<div class="card"><p class="label">Commissions closed</p><h2 style="font-size:clamp(30px,3.6vw,44px)">Taking a short break.</h2><p style="color:var(--muted);margin-top:12px">${esc(s.closedNote)}</p><div class="actions"><a class="btn btn-moss" href="#vault">Explore the Vault</a><a class="btn btn-plain" ${out(s.discord)}>Follow on Discord</a></div></div>`;
  else main = `<div class="card"><form class="form" id="cform" novalidate>
    <label class="f">Your name <span class="req">*</span><input id="c-name" autocomplete="name" maxlength="80" required></label>
+   <label class="f">Public display name <span class="req">*</span><input id="c-public-name" maxlength="60" required placeholder="Name shown on the public queue"></label>
+   <label class="f">Profile picture <em>optional</em><input id="c-avatar" type="file" accept="image/*"></label>
    <label class="f">Gmail <span class="req">*</span><input id="c-gmail" type="email" autocomplete="email" placeholder="you@gmail.com" maxlength="120" required></label>
    <label class="f">Discord username <span class="req">*</span><input id="c-discord" placeholder="yourname" maxlength="60" required></label>
    <label class="f">What should I build? <span class="req">*</span><select id="c-type">${BUILD_TYPES.map(t => `<option>${t}</option>`).join('')}</select></label>
@@ -881,9 +906,12 @@ async function sendCommission(e){
  if (missing) { say('Please fill in every field marked *.', true); $('#' + missing).focus(); return; }
  if (!/^[a-z0-9._%+-]+@(gmail|googlemail)\.com$/i.test(v('c-gmail'))) { say('Please use a Gmail address (ending in @gmail.com).', true); $('#c-gmail').focus(); return; }
  if (!CONNECTED) { say('This form isn’t connected yet. The site owner needs to finish setup.', true); return; }
- const data = {name:v('c-name'), gmail:v('c-gmail'), discord:v('c-discord'), type:v('c-type'), platform:v('c-platform'), size:v('c-size'), budget:v('c-budget'), deadline:v('c-deadline'), idea:v('c-idea'), refs:v('c-refs')};
+ const avatarFile = $('#c-avatar').files[0];
+ if (avatarFile && avatarFile.size > 3 * 1048576) { say('Profile picture must be 3 MB or smaller.', true); return; }
+ const data = {name:v('c-name'), publicName:v('c-public-name'), gmail:v('c-gmail'), discord:v('c-discord'), type:v('c-type'), platform:v('c-platform'), size:v('c-size'), budget:v('c-budget'), deadline:v('c-deadline'), idea:v('c-idea'), refs:v('c-refs')};
  btn.disabled = true; say('Sending…');
  try {
+  if (avatarFile) { const encoded = await fileToBase64(avatarFile, true); data.avatarData = encoded.data; }
   const r = await post({action:'commission', data, hp:v('c-hp')});
   lastRequest = {name:data.name, gmail:data.gmail, ref:r.ref, confirmed:r.confirmed}; likeTitle = '';
   render(); scrollTo(0, 0);
@@ -908,15 +936,15 @@ async function loadSite(){
  if (!CONNECTED) return;
  try {
   const j = GAS ? await post({action:'site'}) : await (await fetch(API + (API.includes('?') ? '&' : '?') + 'action=site')).json();
-  if (j && j.ok) { GOOGLE_CLIENT_ID = String(j.googleClientId || GOOGLE_CLIENT_ID).trim(); remote = {settings:j.settings || {}, featured:Array.isArray(j.featured) ? j.featured : [], builds:Array.isArray(j.builds) ? j.builds : []}; renderChrome(); if (!['commission','manager','commission-list'].includes(currentView)) render(); if (currentView === 'manager' && !M.token) renderGoogleSignIn(); }
+  if (j && j.ok) { GOOGLE_CLIENT_ID = String(j.googleClientId || GOOGLE_CLIENT_ID).trim(); remote = {settings:j.settings || {}, featured:Array.isArray(j.featured) ? j.featured : [], builds:Array.isArray(j.builds) ? j.builds : [], community:j.community || {feedback:[],referrals:[]}}; renderChrome(); if (!['commission','manager','commission-list'].includes(currentView)) render(); if (currentView === 'manager' && !M.token) renderGoogleSignIn(); }
  } catch { /* keep the built-in builds */ }
 }
 
 /* =========================================================
    STUDIO MANAGER (password protected; changes save to your Google Sheet)
    ========================================================= */
-const M = {token:null, demo:false, tab:'inbox', comms:[], sel:null, filter:'active', q:'', mailFolder:'inbox', mailQ:'', publicComms:[], publicSel:null, publicLoaded:false, publicLoading:false, publicError:'', edit:null, ownerEmail:''};
-try { M.token = sessionStorage.getItem('pb_token'); } catch {}
+const M = {token:null, demo:false, tab:'inbox', comms:[], sel:null, filter:'active', q:'', mailFolder:'inbox', mailQ:'', publicComms:[], publicQueue:[], publicSel:null, publicLoaded:false, publicLoading:false, publicError:'', edit:null, ownerEmail:'', profile:null, community:{feedback:[],referrals:[]}};
+try { M.token = sessionStorage.getItem('pb_token'); M.profile = JSON.parse(sessionStorage.getItem('pb_profile') || 'null'); } catch {}
 const SAMPLE = () => [
  {id:'PB-1003', received:new Date(Date.now() - 36e5).toISOString(), status:'New', name:'Sample: Alex', gmail:'alex.sample@gmail.com', discord:'alex_builds', type:'Creature or dragon', platform:'Xbox', size:'About 60 blocks long', budget:'$30', deadline:'', idea:'A Night Fury perched on a cliff, wings half open. (This is sample data so you can try the manager.)', refs:'', quote:'', notes:'', read:false, archived:false, thread:[]},
  {id:'PB-1002', received:new Date(Date.now() - 864e5 * 2).toISOString(), status:'Quoted', name:'Sample: Jordan', gmail:'jordan.sample@gmail.com', discord:'jordo', type:'House or building', platform:'Windows / PC', size:'Two-story house', budget:'Not sure', deadline:'', idea:'A cozy wizard tower with a library inside. (Sample data.)', refs:'', quote:'$45', notes:'Asked for reference pictures.', read:true, archived:false, thread:[{at:new Date(Date.now() - 864e5).toISOString(), subject:'Re: your wizard tower', text:'Hey Jordan! A tower like that would be about $45. Do you have pictures of the style you like?'}]},
@@ -932,7 +960,7 @@ async function call(op, payload = {}){
 function demoCall(op, p){
  const site = demoSite, done = extra => Promise.resolve({ok:true, site, commissions:M.comms, ...extra});
  const row = id => site.builds.find(b => b.id === id);
- if (op === 'load') return done();
+ if (op === 'load') return done({community:{feedback:[],referrals:[]}});
  if (op === 'updateCommission') { const c = M.comms.find(x => x.id === p.id); Object.assign(c, Object.fromEntries(Object.entries(p).filter(([k]) => k !== 'id'))); return done(); }
  if (op === 'reply') { const c = M.comms.find(x => x.id === p.id); c.thread.push({at:new Date().toISOString(), subject:p.subject, text:p.message}); if (c.status === 'New') c.status = 'Reviewing'; return done(); }
  if (op === 'deleteCommission') { M.comms = M.comms.filter(x => x.id !== p.id); return done(); }
@@ -942,10 +970,12 @@ function demoCall(op, p){
  if (op === 'removeFile') { const r = row(p.buildId); if (p.kind === 'gallery') r.gallery = r.gallery.filter(g => g.id !== p.fileId); else r[p.kind] = null; return done(); }
  if (op === 'saveSettings') { Object.assign(site.settings, p.settings); return done(); }
  if (op === 'saveFeatured') { site.featured = p.ids; return done(); }
+ if (op === 'community') return done({community:M.community});
+ if (op === 'moderateCommunity') { const k=p.kind==='referral'?'referrals':'feedback'; M.community[k]=(M.community[k]||[]).filter(x=>x.id!==p.id); return done({community:M.community}); }
  return done();
 }
-function applySite(site){ if (site) { remote = {settings:site.settings || {}, featured:site.featured || [], builds:site.builds || []}; M.ownerEmail = (site.settings && (site.settings.notify || site.settings.ownerEmail)) || M.ownerEmail; renderChrome(); } }
-function signOut(note){ M.token = null; M.demo = false; try { sessionStorage.removeItem('pb_token'); } catch {} render(); if (note) { const m = $('#l-msg'); if (m) { m.textContent = note; m.classList.add('err'); } } }
+function applySite(site){ if (site) { remote = {settings:site.settings || {}, featured:site.featured || [], builds:site.builds || [], community:site.community || remote.community || {feedback:[],referrals:[]}}; M.ownerEmail = (site.settings && (site.settings.notify || site.settings.ownerEmail)) || M.ownerEmail; renderChrome(); } }
+function signOut(note){ M.token = null; M.demo = false; M.profile = null; try { sessionStorage.removeItem('pb_token'); sessionStorage.removeItem('pb_profile'); } catch {} render(); if (note) { const m = $('#l-msg'); if (m) { m.textContent = note; m.classList.add('err'); } } }
 
 function renderGoogleSignIn(attempt) {
  attempt = attempt || 0;
@@ -967,7 +997,8 @@ async function handleGoogleCredential(response) {
  try {
   const result = await post({action:'googleLogin', credential:response.credential});
   M.token = result.token;
-  try { sessionStorage.setItem('pb_token', result.token); } catch {}
+  try { const claims = JSON.parse(atob(response.credential.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); M.profile = {name:String(claims.name || result.email), picture: /^https:\/\//i.test(String(claims.picture || '')) ? String(claims.picture) : '', email:String(result.email || '')}; } catch { M.profile = {name:String(result.email || 'Owner account'), picture:'', email:String(result.email || '')}; }
+  try { sessionStorage.setItem('pb_token', result.token); sessionStorage.setItem('pb_profile', JSON.stringify(M.profile)); } catch {}
   await openManager();
  } catch (err) { say('l-msg', err.message || 'Google sign-in failed.', true); }
 }
@@ -986,16 +1017,17 @@ function viewManager(){
  }
  const newCount = M.comms.filter(c => !c.read && !c.archived).length;
  const doneCount = M.comms.filter(c => !c.archived && c.status === 'Done').length;
- const tabs = [['inbox','inbox','Commissions', newCount], ['done','check-circle','Done Commissions', doneCount], ['builds','cube','Builds'], ['home','home','Homepage'], ['settings','gear','Settings']];
+ const communityCount = [...(M.community.feedback||[]), ...(M.community.referrals||[])].filter(x=>!x.approved).length;
+ const tabs = [['inbox','inbox','Commissions', newCount], ['done','check-circle','Done Commissions', doneCount], ['community','users','Feedback & referrals', communityCount], ['builds','cube','Builds'], ['home','home','Homepage'], ['settings','gear','Settings']];
  return `<div class="mgr"><nav class="rail" aria-label="Manager">
-  <p class="who">Signed in as owner</p>
+  <div class="who" style="display:flex;align-items:center;gap:9px">${M.profile && M.profile.picture ? `<img src="${esc(M.profile.picture)}" alt="" referrerpolicy="no-referrer" style="width:30px;height:30px;border-radius:50%;object-fit:cover">` : `<span style="width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--leaf);color:white">${esc(String(M.profile && M.profile.name || 'P').slice(0,1).toUpperCase())}</span>`}<span>${esc(M.profile && M.profile.name || 'Studio owner')}</span></div>
   ${tabs.map(([k, i, l, n]) => `<button type="button" data-tab="${k}" aria-current="${M.tab === k}">${ic(i)} ${l}${n ? `<span class="count">${n}</span>` : ''}</button>`).join('')}
   <span class="spacer"></span><button type="button" data-go="home">${ic('left')} View site</button><button type="button" id="signout">${ic('out')} Sign out</button>
  </nav><div class="mmain" id="mmain">${M.demo ? `<p class="banner">Preview with sample data. Nothing here is saved, and no emails are sent.</p>` : ''}<div id="mtab"></div></div></div>`;
 }
 function renderTab(){
  const el = $('#mtab'); if (!el) return;
- el.innerHTML = ({inbox:tabInbox, done:tabDoneCommissions, builds:tabBuilds, home:tabHome, settings:tabSettings})[M.tab]();
+ el.innerHTML = ({inbox:tabInbox, done:tabDoneCommissions, community:tabCommunity, builds:tabBuilds, home:tabHome, settings:tabSettings})[M.tab]();
  $$('[data-tab]').forEach(b => b.setAttribute('aria-current', b.dataset.tab === M.tab));
  const n = M.comms.filter(c => !c.read && !c.archived).length, badge = $('[data-tab="inbox"] .count');
  if (badge) badge.textContent = n; else if (n) $('[data-tab="inbox"]').insertAdjacentHTML('beforeend', `<span class="count">${n}</span>`);
@@ -1047,6 +1079,17 @@ function paneCommission(c){
    <label class="f">Quoted price<input id="u-quote" value="${esc(c.quote)}" maxlength="80" placeholder="e.g. $45"></label>
    <label class="f full">Private notes <em>only you see these</em><textarea id="u-notes" maxlength="4000" style="min-height:90px">${esc(c.notes)}</textarea></label>
    <div class="row-end"><button class="btn btn-moss btn-sm" type="submit">${ic('check')} Save</button><p class="msg" id="u-msg" role="status"></p></div></form>
+  <p class="ph">Public queue listing</p><form class="mform" id="queueform"><label class="f">Public display name<input id="q-name" maxlength="60" value="${esc(c.publicName || c.name || '')}"></label><label class="f">Queue position<input id="q-position" type="number" min="1" max="999" value="${esc(c.queuePosition || '')}"></label><label class="f">Estimated start date<input id="q-start" type="date" value="${esc(c.estimatedStart || '')}"></label><label class="check"><input id="q-visible" type="checkbox"${c.queueVisible === false ? '' : ' checked'}> Show in public queue</label><div class="row-end"><button class="btn btn-moss btn-sm" type="submit">Save public listing</button><p class="msg" id="q-msg"></p></div></form>
+  ${c.status === 'Done' ? `<p class="ph">Completed project details</p><form class="mform" id="doneform">
+   <label class="f">Public project title<input id="d-title" maxlength="100" value="${esc(c.completedTitle||c.type||'')}" placeholder="Name shown in the showcase"></label>
+   <label class="f">Public price <em>optional</em><input id="d-price" maxlength="80" value="${esc(c.completedPrice||'')}"></label>
+   <label class="f">Completed size<input id="d-size" maxlength="100" value="${esc(c.completedSize||c.size||'')}"></label>
+   <label class="f">Blocks used<input id="d-blocks" maxlength="80" value="${esc(c.completedBlocks||'')}"></label>
+   <label class="f">Time to build<input id="d-time" maxlength="80" value="${esc(c.completedTime||'')}"></label>
+   <label class="f full">Public build details<textarea id="d-details" maxlength="5000" style="min-height:130px" placeholder="What you built, special details, materials, and what makes it unique.">${esc(c.completedDetails||'')}</textarea></label>
+   <div class="row-end"><button class="btn btn-moss btn-sm" type="submit">Save completed details</button><p class="msg" id="d-msg"></p></div></form>` : ''}
+
+  ${c.status === 'Done' ? `<div class="fslot"><h4>Completed build pictures</h4><div class="gthumbs">${(c.completedGallery||[]).map(g=>`<figure><img src="${esc(imgOk(g.url))}" alt=""><button class="btn btn-danger btn-sm" type="button" data-rm-commission-image="${esc(g.id)}">Remove</button></figure>`).join('')||'<span style="color:var(--muted)">No pictures uploaded yet</span>'}</div><label class="btn btn-plain btn-sm" style="justify-self:start">Add pictures<input type="file" accept="image/*" multiple data-up-commission hidden></label><p id="done-upload-msg" class="msg"></p></div>` : ''}
   <p class="ph">Reply by email</p>
   <form class="mform" id="creply"><label class="f full">Subject<input id="r-sub" maxlength="150" value="${esc('Your PinnacleBuild-Studios commission (' + c.id + ')')}"></label>
    <label class="f full">Message<textarea id="r-msg" maxlength="6000" placeholder="Hi ${esc(c.name.replace(/^Sample: /, ''))}, thanks for your request!"></textarea></label>
@@ -1064,14 +1107,14 @@ function renderCommissionSurface(){
 function publicCommissionPane(c){
  const facts = [
   ['Build type',c.type],['Platform',c.platform],['Dimensions',c.size],
-  ['Budget range',c.budget],['Requested deadline',c.deadline && niceDate(c.deadline)],
+  ['Public price',c.completedPrice],['Blocks used',c.completedBlocks],['Time to build',c.completedTime],['Requested deadline',c.deadline && niceDate(c.deadline)],
   ['Received',c.received && niceDate(c.received)]
  ].filter(x=>x[1]);
  const refs = String(c.refs || '').split(/\\s+/).filter(Boolean);
  const detail = c.completedDetails || c.workSummary || c.completionNotes || '';
  const gallery = Array.isArray(c.gallery) ? c.gallery.filter(x => x && https(x.url)).slice(0,12) : [];
  return `<article class="pane public-commission-detail">
-  <div class="pane-top"><div><p class="label">Completed commission</p><h3>${esc(c.title || c.type || 'Minecraft build')}</h3><p class="sub">${esc(c.id)} · <span class="st" data-s="Done" style="margin:0">Done</span></p></div><span class="public-lock">${ic('eye')} Public showcase</span></div>
+  <div class="pane-top"><div><p class="label">Completed commission</p><h3>${esc(c.title || c.type || 'Minecraft build')}</h3><p class="sub">${c.avatarUrl && https(c.avatarUrl) ? `<img src="${esc(imgOk(c.avatarUrl))}" alt="" style="width:30px;height:30px;border-radius:50%;object-fit:cover;vertical-align:middle">` : ''} ${esc(c.publicName || 'PinnacleBuilds client')} · ${esc(c.id)} · <span class="st" data-s="Done" style="margin:0">Done</span></p></div><span class="public-lock">${ic('eye')} Public showcase</span></div>
   <section class="public-project-section"><p class="ph">Project specifications</p><div class="dgrid">${facts.map(([l,v])=>`<div><small>${l}</small><b>${esc(v)}</b></div>`).join('')}</div></section>
   <section class="public-project-section"><p class="ph">Original project brief</p><div class="idea public-idea">${esc(c.idea || 'No project description was added.')}</div></section>
   ${detail ? `<section class="public-project-section"><p class="ph">Completed work and build notes</p><div class="idea public-idea">${esc(detail)}</div></section>` : ''}
@@ -1090,11 +1133,13 @@ function viewCommissionList(){
   <aside class="mail-sidebar"><p class="mail-brand">PUBLIC SHOWCASE</p><button type="button" aria-current="true">${ic('check-circle')} <span>Done Commissions</span><b>${M.publicComms.length}</b></button><div class="mail-note">Anyone can view this page. Editing and manager tools are not available here.</div></aside>
   <div class="mail-list box"><div class="mail-list-head"><h2>Done Commissions</h2><button type="button" class="btn btn-plain btn-sm" id="public-refresh">${ic('refresh-cw')} Refresh</button></div>
    <label class="msearch">${ic('search')}<input id="mail-q" type="search" placeholder="Search completed projects" value="${esc(M.mailQ)}"></label>
-   <div class="mail-rows">${visible.length ? visible.map(x=>`<button type="button" class="mrow public-mrow${x.id===M.publicSel?' selected':''}" data-public-sel="${esc(x.id)}" aria-current="${x.id===M.publicSel}"><span class="dot"></span><span><span class="nm">${esc(x.type || 'Minecraft build')}</span><span class="snip">${esc(x.idea || 'Completed commission')} </span><span class="st" data-s="Done">Done</span></span><span class="when">${esc(shortDate(x.received))}<br>${esc(x.id)}</span></button>`).join('') : `<div class="mail-empty"><b>${M.publicLoading?'Loading…':M.publicError?'Could not load commissions':'No completed commissions yet'}</b><p>${M.publicError?esc(M.publicError):M.publicLoading?'Getting the public project list.': 'Completed projects will appear here once they are marked done in the private manager.'}</p></div>`}</div>
+   <div class="mail-rows">${visible.length ? visible.map(x=>`<button type="button" class="mrow public-mrow${x.id===M.publicSel?' selected':''}" data-public-sel="${esc(x.id)}" aria-current="${x.id===M.publicSel}"><span class="dot"></span><span>${x.avatarUrl && https(x.avatarUrl) ? `<img src="${esc(imgOk(x.avatarUrl))}" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:7px">` : ''}<span class="nm">${esc(x.publicName || x.title || x.type || 'Minecraft build')}</span><span class="snip">${esc(x.idea || 'Completed commission')} </span><span class="st" data-s="Done">Done</span></span><span class="when">${esc(shortDate(x.received))}<br>${esc(x.id)}</span></button>`).join('') : `<div class="mail-empty"><b>${M.publicLoading?'Loading…':M.publicError?'Could not load commissions':'No completed commissions yet'}</b><p>${M.publicError?esc(M.publicError):M.publicLoading?'Getting the public project list.': 'Completed projects will appear here once they are marked done in the private manager.'}</p></div>`}</div>
+   <section class="pane" style="margin:14px 0"><h2 style="font-size:18px">Current Commission Queue</h2><p class="sub">Public display names and estimated start dates only.</p><div class="mail-rows">${M.publicQueue.length ? M.publicQueue.map(x => '<div class="mrow"><span class="dot"></span><span>' + (x.avatarUrl && https(x.avatarUrl) ? '<img src="' + esc(imgOk(x.avatarUrl)) + '" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:7px">' : '') + '<span class="nm">' + esc(x.displayName) + '</span><span class="snip">' + esc(x.type) + ' · ' + esc(x.status) + '</span></span><span class="when">#' + esc(x.position) + '<br>' + esc(x.estimatedStart || 'Date not set') + '</span></div>').join('') : '<p class="sub">No public queue entries yet.</p>'}</div></section>
    <p class="public-status">${esc(statusText)}</p>
   </div>
   <div class="mail-detail">${c ? publicCommissionPane(c) : `<div class="pane mail-placeholder"><div class="mail-placeholder-icon">${ic('check-circle')}</div><h3>Explore completed work</h3><p>Select a completed commission to read its project details. Customer contact information and private manager notes are never displayed.</p></div>`}</div>
- </div></section>`;
+ </div></section>
+ <div class="wrap" style="padding:0 0 32px;text-align:center"><a class="link" href="#manager">Studio sign in</a></div>`;
 }
 function renderCommissionList(){
  const el = $('#main'); if (!el) return;
@@ -1108,6 +1153,7 @@ async function loadPublicCommissions(){
  try {
   const r = await post({action:'publicCommissions'});
   M.publicComms = Array.isArray(r.commissions) ? r.commissions : [];
+  M.publicQueue = Array.isArray(r.queue) ? r.queue : [];
   M.publicLoaded = true; M.publicLoading = false;
   if (!M.publicComms.some(c=>c.id===M.publicSel)) M.publicSel = null;
  } catch(e) { M.publicLoading = false; M.publicError = e.message || 'Could not load completed commissions.'; }
@@ -1115,6 +1161,11 @@ async function loadPublicCommissions(){
 }
 
 /* builds */
+function tabCommunity(){
+ const items=[...(M.community.feedback||[]),...(M.community.referrals||[])].sort((a,b)=>String(b.created).localeCompare(String(a.created)));
+ return '<div class="mhead"><div><h2>Feedback & referrals</h2><p class="sub">Review visitor submissions before they appear on the public website.</p></div><button class="btn btn-plain btn-sm" type="button" id="community-refresh">Refresh</button></div>'+
+ (items.length?items.map(x=>'<article class="pane community-review"><div class="pane-top"><div><p class="label">'+(x.kind==='referral'?'Referral':'Feedback')+'</p><h3>'+esc(x.displayName||'Visitor')+'</h3><p class="sub">'+esc(x.id)+' · '+esc(x.created||'')+'</p></div><span class="st" data-s="'+(x.approved?'Done':'New')+'">'+(x.approved?'Published':'Pending review')+'</span></div><p class="idea">'+esc(x.message||'')+'</p><div class="btns" style="margin-top:12px">'+(x.approved?'<button class="btn btn-plain btn-sm" data-community-hide="'+esc(x.id)+'" data-community-kind="'+x.kind+'">Unpublish</button>':'<button class="btn btn-moss btn-sm" data-community-approve="'+esc(x.id)+'" data-community-kind="'+x.kind+'">Approve & publish</button>')+'<button class="btn btn-danger btn-sm" data-community-delete="'+esc(x.id)+'" data-community-kind="'+x.kind+'">Delete</button></div></article>').join(''):'<div class="pane"><p class="sub">No feedback or referral submissions yet.</p></div>');
+}
 function tabBuilds(){
  const all = builds(true), b = M.edit === 'new' ? null : all.find(x => x.id === M.edit);
  return `<div class="mhead"><h2>Builds</h2><button class="btn btn-leaf btn-sm" type="button" id="b-new">${ic('plus')} New build</button></div>
@@ -1186,6 +1237,17 @@ function tabSettings(){
 </div>`;
 }
 
+
+function tabKnowledge(){
+ const approved = (() => { try { return JSON.parse(S().aiApprovedCommissions || '[]'); } catch(e) { return []; } })();
+ const done = M.comms.filter(c => c.status === 'Done' && !c.archived);
+ return `<div class="mhead"><div><h2>AI Knowledge Base</h2><p style="color:var(--muted);margin-top:5px">Choose which finished projects may be used as public examples. Private customer details and notes are never shared.</p></div></div>
+ <div class="pane"><h3>Public AI training examples</h3><p class="sub">Only checked completed commissions are approved. Historical prices are not public unless a separate public price is explicitly added to a project record.</p>
+ <div style="display:grid;gap:10px;margin:18px 0">${done.length ? done.map(c=>`<label class="check"><input type="checkbox" data-ai-approve="${esc(c.id)}" ${approved.includes(c.id)?'checked':''}> <span><b>${esc(c.type || 'Minecraft build')}</b> — ${esc(c.size || 'Size not recorded')}<small style="display:block;color:var(--muted)">${esc(c.id)} · ${esc(c.idea || '')}</small></span></label>`).join('') : '<p style="color:var(--muted)">No completed commissions yet. Mark a commission Done before approving it here.</p>'}</div>
+ <div class="row-end"><button class="btn btn-moss btn-sm" type="button" id="save-ai-knowledge">Save approved projects</button><p class="msg" id="ai-kb-msg" role="status"></p></div></div>
+ <div class="pane" style="margin-top:14px"><h3>AI assistants</h3><p class="sub">The public and owner chat interfaces can be enabled after an adult-managed API connection is configured securely in Google Apps Script. No API key is stored in this website.</p><p class="msg">Connection status: API key not configured in this setup branch.</p></div>`;
+}
+
 /* manager events */
 const say = (id, t, err) => { const m = $('#' + id); if (m) { m.textContent = t; m.classList.toggle('err', !!err); } };
 async function act(msgId, fn, okText){
@@ -1218,6 +1280,22 @@ document.addEventListener('click', async e => {
  if (t.dataset.tab) { M.tab = t.dataset.tab; renderTab(); return; }
  if (t.dataset.mailFolder) { M.mailFolder = t.dataset.mailFolder; M.sel = null; renderCommissionList(); return; }
  if (t.dataset.filter) { M.filter = t.dataset.filter; renderTab(); return; }
+ if (t.dataset.rmCommissionImage) {
+  const id=M.sel, fileId=t.dataset.rmCommissionImage;
+  if(!id)return;
+  try { const r=await call('removeCommissionImage',{id,fileId}); M.comms=r.commissions||M.comms; renderTab(); }
+  catch(err){ const m=$('#done-upload-msg'); if(m)m.textContent=err.message||'Could not remove picture.'; }
+  return;
+ }
+ if (t.id === 'community-refresh') { const r=await call('community'); M.community=r.community||{feedback:[],referrals:[]}; renderTab(); return; }
+ if (t.dataset.communityApprove || t.dataset.communityHide || t.dataset.communityDelete) {
+  const id=t.dataset.communityApprove||t.dataset.communityHide||t.dataset.communityDelete, kind=t.dataset.communityKind;
+  const payload={id,kind,approved:!!t.dataset.communityApprove,remove:!!t.dataset.communityDelete};
+  try { const r=await call('moderateCommunity',payload); M.community=r.community||M.community; renderTab(); }
+  catch(err) { const el=$('#mtab'); if(el) el.insertAdjacentHTML('afterbegin','<p class="banner">'+esc(err.message||'Could not save moderation change.')+'</p>'); }
+  return;
+ }
+ if (t.id === 'save-ai-knowledge') { const approved = $('[data-ai-approve]:checked').map(x => x.dataset.aiApprove); await act('ai-kb-msg', () => call('saveSettings', {settings:{aiApprovedCommissions:JSON.stringify(approved)}}), 'Saved. The public AI may reference only these approved projects.'); return; }
  if (t.id === 'public-refresh') { M.publicLoaded = false; M.publicError = ''; await loadPublicCommissions(); return; }
  if (t.dataset.publicSel) { M.publicSel = t.dataset.publicSel; renderCommissionList(); return; }
  if (t.id === 'refresh') { await act('u-msg', () => call('commissions'), ''); return; }
@@ -1240,7 +1318,14 @@ document.addEventListener('click', async e => {
 function buildPayload(b){ return {id:b.id, title:b.title, category:b.category, tagline:b.tagline, story:b.story, time:b.time, blocks:b.blocks, size:b.size, finished:b.finished, edition:b.edition, tags:(b.tags || []).join(', '), link:b.link, hidden:b.hidden}; }
 
 document.addEventListener('change', async e => {
- const inp = e.target; if (!inp.dataset || !inp.dataset.up || !inp.files.length) return;
+ const inp = e.target;
+ if (inp.dataset && inp.dataset.upCommission && inp.files.length) {
+  const commission = M.comms.find(x => x.id === M.sel); if (!commission) return;
+  try { for (const file of [...inp.files]) { if (file.size > 30 * 1048576) throw new Error('Each image must be 30 MB or smaller.'); const enc = await fileToBase64(file, true); await call('uploadCommissionImage', {id:commission.id, name:file.name.replace(/\.\w+$/, '.jpg'), data:enc.data}); } const fresh=await call('commissions'); M.comms=fresh.commissions || M.comms; renderTab(); }
+  catch(err) { const msg=$('#done-upload-msg'); if(msg) msg.textContent=err.message || 'Picture upload failed.'; }
+  return;
+ }
+ if (!inp.dataset || !inp.dataset.up || !inp.files.length) return;
  const kind = inp.dataset.up, b = builds(true).find(x => x.id === M.edit), files = [...inp.files];
  const isImg = kind === 'cover' || kind === 'gallery';
  try {
@@ -1268,8 +1353,26 @@ document.addEventListener('submit', async e => {
  const f = e.target; if (!f.id) return;
  e.preventDefault();
  const v = id => $('#' + id).value.trim();
+ if (f.id === 'feedback-form' || f.id === 'referral-form') {
+  const feedback=f.id==='feedback-form', prefix=feedback?'fb':'rf', msg=$('#'+prefix+'-msg'), btn=f.querySelector('button[type="submit"]');
+  const say=(t,err)=>{msg.textContent=t;msg.classList.toggle('err',!!err);};
+  const file=$('#'+prefix+'-avatar').files[0];
+  if(file&&file.size>3*1048576){say('Profile picture must be 3 MB or smaller.',true);return;}
+  if(!CONNECTED){say('The form is not connected yet.',true);return;}
+  const data={displayName:$('#'+prefix+'-name').value.trim(),message:$('#'+prefix+'-message').value.trim()};
+  if(!data.displayName||!data.message){say('Add your display name and message first.',true);return;}
+  btn.disabled=true;say('Sending…');
+  try{if(file){const enc=await fileToBase64(file,true);data.avatarData=enc.data;}
+   const r=await post({action:feedback?'publicFeedback':'publicReferral',data,hp:$('#'+prefix+'-hp').value});
+   say(r.message||'Sent for review.');f.reset();
+  }catch(err){say(err.message||'Could not send. Try again.',true);}
+  finally{btn.disabled=false;}
+  return;
+ }
  if (f.id === 'cform') return sendCommission(e);
  if (f.id === 'cupd') return act('u-msg', () => call('updateCommission', {id:M.sel, status:v('u-status'), quote:v('u-quote'), notes:$('#u-notes').value}), 'Saved.');
+ if (f.id === 'queueform') return act('q-msg', () => call('updateCommission', {id:M.sel, publicName:v('q-name'), queuePosition:v('q-position'), estimatedStart:v('q-start'), queueVisible:$('#q-visible').checked}), 'Public listing saved.');
+ if (f.id === 'doneform') return act('d-msg', () => call('updateCommission', {id:M.sel, completedTitle:v('d-title'), completedPrice:v('d-price'), completedSize:v('d-size'), completedBlocks:v('d-blocks'), completedTime:v('d-time'), completedDetails:$('#d-details').value}), 'Completed project details saved.');
  if (f.id === 'creply') { if (!v('r-msg')) return say('r-note', 'Write a message first.', true); const btn = $('#r-go'); btn.disabled = true; return act('r-note', () => call('reply', {id:M.sel, subject:v('r-sub'), message:$('#r-msg').value}), M.demo ? 'Preview: not really sent.' : 'Sent from your Gmail.'); }
  if (f.id === 'bform') {
   if (!v('e-title')) return say('e-msg', 'Give the build a title.', true);
@@ -1286,7 +1389,7 @@ document.addEventListener('submit', async e => {
 });
 
 async function openManager(){
- try { const r = await call('load'); applySite(r.site); M.comms = r.commissions || []; render(); }
+ try { const r = await call('load'); applySite(r.site); M.comms = r.commissions || []; const cr=await call('community'); M.community=cr.community||{feedback:[],referrals:[]}; render(); }
  catch (e) { if (!e.signedOut) { render(); say('l-msg', e.message, true); } }
 }
 

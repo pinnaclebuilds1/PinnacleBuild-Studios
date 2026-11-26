@@ -27,7 +27,10 @@ function setupSite() {
   ensureSheet_(ss, PB.BUILDS, ['id','data']);
   ensureSheet_(ss, PB.SETTINGS, ['key','value']);
   ensureSheet_(ss, 'Feedback', ['id','created','displayName','avatarUrl','message','approved']);
-  ensureSheet_(ss, 'Referrals', ['id','created','displayName','avatarUrl','message','approved']);
+  ensureSheet_(ss, 'Referrals', ['id','created','displayName','avatarUrl','message','approved','profileId','email']);
+  ensureSheet_(ss, 'Profiles', ['id','googleSub','email','name','picture','displayName','discord','created','updated']);
+  ensureCommunityColumns_(ss, 'Feedback');
+  ensureCommunityColumns_(ss, 'Referrals');
   const props = PropertiesService.getScriptProperties();
   props.setProperty('PB_SPREADSHEET_ID', ss.getId());
 
@@ -84,6 +87,9 @@ function route_(req) {
   if (req.action === 'publicFeedback') return publicFeedback_(req);
   if (req.action === 'publicReferral') return publicReferral_(req);
   if (req.action === 'googleLogin') return googleLogin_(req.credential);
+  if (req.action === 'memberLogin') return memberLogin_(req.credential);
+  if (req.action === 'profileGet') return profileGet_(req.userToken);
+  if (req.action === 'profileUpdate') return profileUpdate_(req.userToken, req.data || {});
   // Public read-only feed: exposes completed project details only, never customer contact data.
   if (req.action === 'publicCommissions') return publicCommissions_();
   if (req.action === 'admin') {
@@ -95,7 +101,14 @@ function route_(req) {
 }
 
 function createCommission_(req) {
+  const profile = requireProfile_(req.userToken);
   const d = req.data || {};
+  d.profileId = profile.id;
+  d.profileEmail = profile.email;
+  d.profileDisplayName = profile.displayName;
+  d.gmail = profile.email;
+  d.publicName = profile.displayName;
+  d.avatarUrl = profile.picture || '';
   if (String(req.hp || '').trim()) throw new Error('Request could not be accepted.');
   ['name','gmail','discord','idea'].forEach(k => {
     if (!String(d[k] || '').trim()) throw new Error('Please complete all required fields.');
@@ -104,11 +117,7 @@ function createCommission_(req) {
     throw new Error('Please use a Gmail address.');
   }
   d.publicName = String(d.publicName || d.name || '').trim().slice(0,60);
-  if (d.avatarData) {
-    if (String(d.avatarData).length > 4 * 1024 * 1024) throw new Error('Profile picture is too large. Choose a smaller image.');
-    const avatar = savePublicImage_(d.avatarData, 'profile-' + Utilities.getUuid().slice(0,8) + '.jpg');
-    d.avatarUrl = avatar.url; delete d.avatarData;
-  }
+  delete d.avatarData;
   const id = 'PB-' + Utilities.getUuid().slice(0,8).toUpperCase();
   const received = new Date().toISOString();
   const row = [id, received, 'New', JSON.stringify(d), '', '', false, false, '[]'];
@@ -152,32 +161,89 @@ function createCommission_(req) {
   return {ref:id, confirmed:confirmed};
 }
 
-function googleLogin_(credential) {
+function verifyGoogleCredential_(credential) {
   const props = PropertiesService.getScriptProperties();
   const clientId = String(props.getProperty('PB_GOOGLE_CLIENT_ID') || '').trim();
-  if (!clientId) throw new Error('Google sign-in is not configured yet. Set the Google OAuth client ID from the spreadsheet menu.');
+  if (!clientId) throw new Error('Google sign-in is not configured yet. Set the OAuth Client ID from the Google Sheet menu.');
   const idToken = String(credential || '').trim();
   if (!idToken || idToken.length > 12000) throw new Error('Google sign-in did not return a valid credential.');
-  const url = 'https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(idToken);
-  const response = UrlFetchApp.fetch(url, {muteHttpExceptions:true});
+  const response = UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(idToken), {muteHttpExceptions:true});
   if (response.getResponseCode() !== 200) throw new Error('Google could not verify this sign-in. Please try again.');
   let claims;
-  try { claims = JSON.parse(response.getContentText()); }
-  catch (e) { throw new Error('Google returned an unreadable sign-in response.'); }
+  try { claims = JSON.parse(response.getContentText()); } catch (e) { throw new Error('Google returned an unreadable sign-in response.'); }
   const email = String(claims.email || '').trim().toLowerCase();
   const issuer = String(claims.iss || '');
-  const expiry = Number(claims.exp || 0);
-  const now = Math.floor(Date.now() / 1000);
+  const expiry = Number(claims.exp || 0), now = Math.floor(Date.now() / 1000);
   const verified = claims.email_verified === true || String(claims.email_verified) === 'true';
   if (claims.aud !== clientId || !['accounts.google.com','https://accounts.google.com'].includes(issuer) ||
-      !claims.sub || !verified || !expiry || expiry <= now) {
-    throw new Error('Google sign-in could not be validated. Please try again.');
-  }
-  if (email !== PB.OWNER_EMAIL) throw new Error('This Google account does not have owner access to Pinnacle Builds.');
+      !claims.sub || !verified || !expiry || expiry <= now) throw new Error('Google sign-in could not be validated. Please try again.');
+  return {claims:claims, email:email, ttl:Math.max(60, Math.min(PB.TOKEN_TTL, expiry-now))};
+}
+
+function googleLogin_(credential) {
+  const auth = verifyGoogleCredential_(credential);
+  if (auth.email !== PB.OWNER_EMAIL) throw new Error('This Google account does not have owner access to Pinnacle Builds.');
   const token = Utilities.getUuid() + Utilities.getUuid();
-  const ttl = Math.max(60, Math.min(PB.TOKEN_TTL, expiry - now));
-  CacheService.getScriptCache().put('PB_TOKEN_' + token, email, ttl);
-  return {token:token, email:email};
+  CacheService.getScriptCache().put('PB_TOKEN_' + token, auth.email, auth.ttl);
+  return {token:token, email:auth.email, role:'owner'};
+}
+
+function memberLogin_(credential) {
+  const auth = verifyGoogleCredential_(credential), c = auth.claims;
+  const sh = sheet_('Profiles'), values = sh.getDataRange().getValues();
+  const sub = String(c.sub), now = new Date().toISOString();
+  let row = -1;
+  for (let i=1;i<values.length;i++) if (String(values[i][1]) === sub) { row=i+1; break; }
+  const profileId = row > 0 ? String(values[row-1][0]) : 'MB-' + hash_(sub).slice(0,12).toUpperCase();
+  const name = String(c.name || auth.email).trim().slice(0,80);
+  const picture = /^https:\/\//i.test(String(c.picture || '')) ? String(c.picture) : '';
+  const oldDisplay = row > 0 ? String(values[row-1][5] || '') : '';
+  const oldDiscord = row > 0 ? String(values[row-1][6] || '') : '';
+  const created = row > 0 ? values[row-1][7] : now;
+  const displayName = oldDisplay || name;
+  const record = [profileId,sub,auth.email,name,picture,displayName,oldDiscord,created,now];
+  if (row > 0) sh.getRange(row,1,1,record.length).setValues([record]);
+  else sh.appendRow(record);
+  const token = Utilities.getUuid() + Utilities.getUuid();
+  CacheService.getScriptCache().put('PB_MEMBER_TOKEN_' + token, profileId, auth.ttl);
+  return {token:token, role:'member', profile:publicProfile_(record)};
+}
+
+function publicProfile_(r) {
+  return {id:String(r[0]), email:String(r[2]), name:String(r[3]), picture:String(r[4] || ''),
+    displayName:String(r[5] || r[3]), discord:String(r[6] || ''), created:String(r[7] || '')};
+}
+
+function requireProfile_(token) {
+  const id = token && CacheService.getScriptCache().get('PB_MEMBER_TOKEN_' + token);
+  if (!id) { const err = new Error('Your sign-in expired. Please sign in again.'); err.signedOut = true; throw err; }
+  const values = sheet_('Profiles').getDataRange().getValues();
+  for (let i=1;i<values.length;i++) if (String(values[i][0]) === String(id)) return publicProfile_(values[i]);
+  const err = new Error('Your profile could not be found. Please sign in again.'); err.signedOut = true; throw err;
+}
+
+function profileGet_(token) {
+  const profile = requireProfile_(token);
+  const commissions = commissions_().filter(c => String(c.profileId || '') === profile.id)
+    .map(c => ({id:c.id, received:c.received, status:c.status, type:c.type || 'Minecraft build'}));
+  const community = ['Feedback','Referrals'].flatMap(kind => readCommunitySheet_(kind)
+    .filter(x => x.profileId === profile.id)
+    .map(x => ({id:x.id, kind:x.kind, created:x.created, message:x.message, approved:x.approved})));
+  return {profile:profile, commissions:commissions, community:community};
+}
+
+function profileUpdate_(token, data) {
+  const profile = requireProfile_(token), sh = sheet_('Profiles'), values = sh.getDataRange().getValues();
+  const displayName = String(data.displayName || '').trim().slice(0,60);
+  const discord = String(data.discord || '').trim().slice(0,60);
+  if (!displayName) throw new Error('Choose a display name first.');
+  for (let i=1;i<values.length;i++) if (String(values[i][0]) === profile.id) {
+    sh.getRange(i+1,6).setValue(displayName);
+    sh.getRange(i+1,7).setValue(discord);
+    sh.getRange(i+1,9).setValue(new Date().toISOString());
+    return {profile:requireProfile_(token)};
+  }
+  throw new Error('Your profile could not be found.');
 }
 
 function requireAuth_(token) {
@@ -364,35 +430,33 @@ function removeCommissionImage_(p){
 function publicFeedback_(req){ return saveCommunitySubmission_('Feedback', req); }
 function publicReferral_(req){ return saveCommunitySubmission_('Referrals', req); }
 function saveCommunitySubmission_(kind, req){
-  const d=req.data||{}, name=String(d.displayName||'').trim().slice(0,60), message=String(d.message||'').trim().slice(0,1200);
+  const profile=requireProfile_(req.userToken);
+  const d=req.data||{}, name=profile.displayName, message=String(d.message||'').trim().slice(0,1200);
   if(String(req.hp||'').trim()) throw new Error('Request could not be accepted.');
   if(!name||!message) throw new Error('Add a display name and a message first.');
-  let avatar='';
-  if(d.avatarData){
-    if(String(d.avatarData).length>4*1024*1024) throw new Error('Profile picture is too large. Choose a smaller image.');
-    avatar=savePublicImage_(d.avatarData,kind.toLowerCase()+'-'+Utilities.getUuid().slice(0,8)+'.jpg').url;
-  }
   const ss=SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('PB_SPREADSHEET_ID'));
-  const sh=ensureSheet_(ss,kind,['id','created','displayName','avatarUrl','message','approved']);
+  const sh=ensureCommunityColumns_(ss,kind);
   const id=(kind==='Feedback'?'FB-':'RF-')+Utilities.getUuid().slice(0,8).toUpperCase();
-  sh.appendRow([id,new Date().toISOString(),name,avatar,message,false]);
+  sh.appendRow([id,new Date().toISOString(),name,profile.picture,message,false,profile.id,profile.email]);
   return {ok:true,id:id,message:'Thanks! Your submission was sent for review.'};
 }
 function readCommunitySheet_(kind){
   const ss=SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('PB_SPREADSHEET_ID'));
-  const sh=ensureSheet_(ss,kind,['id','created','displayName','avatarUrl','message','approved']);
+  const sh=ensureCommunityColumns_(ss,kind);
   const values=sh.getDataRange().getValues(),out=[];
   for(let i=1;i<values.length;i++){
     if(!values[i][0])continue;
     out.push({id:String(values[i][0]),created:String(values[i][1]||''),displayName:String(values[i][2]||'Visitor'),
-      avatarUrl:String(values[i][3]||''),message:String(values[i][4]||''),approved:values[i][5]===true||String(values[i][5])==='true',kind:kind==='Feedback'?'feedback':'referral'});
+      avatarUrl:String(values[i][3]||''),message:String(values[i][4]||''),approved:values[i][5]===true||String(values[i][5])==='true',
+      profileId:String(values[i][6]||''),email:String(values[i][7]||''),kind:kind==='Feedback'?'feedback':'referral'});
   }
   return out.reverse();
 }
 function communitySubmissions_(){return {feedback:readCommunitySheet_('Feedback'),referrals:readCommunitySheet_('Referrals')};}
 function publishedCommunity_(){
   const c=communitySubmissions_();
-  return {feedback:c.feedback.filter(x=>x.approved),referrals:c.referrals.filter(x=>x.approved)};
+  const safe=a=>a.filter(x=>x.approved).map(x=>({id:x.id,created:x.created,displayName:x.displayName,avatarUrl:x.avatarUrl,message:x.message,kind:x.kind}));
+  return {feedback:safe(c.feedback),referrals:safe(c.referrals)};
 }
 function moderateCommunity_(p){
   const kind=p.kind==='referral'?'Referrals':p.kind==='feedback'?'Feedback':'';
@@ -453,6 +517,12 @@ function ensureSheet_(ss,name,headers) {
   let sh=ss.getSheetByName(name);
   if (!sh) sh=ss.insertSheet(name);
   if (sh.getLastRow()===0) sh.appendRow(headers);
+  return sh;
+}
+function ensureCommunityColumns_(ss,name) {
+  const sh=ensureSheet_(ss,name,['id','created','displayName','avatarUrl','message','approved','profileId','email']);
+  const headers=sh.getRange(1,1,1,Math.max(8,sh.getLastColumn())).getValues()[0].map(String);
+  ['profileId','email'].forEach(h=>{if(!headers.includes(h)){sh.getRange(1,sh.getLastColumn()+1).setValue(h);headers.push(h);}});
   return sh;
 }
 function hash_(value) {

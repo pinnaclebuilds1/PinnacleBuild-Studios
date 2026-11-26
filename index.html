@@ -833,7 +833,7 @@ function rotateFeatured(){
   setTimeout(()=>{
    const live=$('#featured-tiles [data-featured-slot]');
    live.forEach((tile,i)=>{tile.outerHTML=featuredTile(next[i],i).replace('<a class="tile"','<a class="tile rotating-in"');});
-   setTimeout(()=>$('#featured-tiles .rotating-in').forEach(tile=>tile.classList.remove('rotating-in')),1050);
+   $('#featured-tiles .rotating-in').forEach(tile=>tile.classList.remove('rotating-in'));
   },1000);
  },10000);
 }

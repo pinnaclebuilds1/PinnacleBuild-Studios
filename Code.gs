@@ -198,6 +198,8 @@ function admin_(op, p) {
     if (p.archived !== undefined) c.archived = !!p.archived;
     ['publicName','queuePosition','estimatedStart','completedTitle','completedPrice','completedSize','completedBlocks','completedTime','completedDetails'].forEach(k => { if (p[k] !== undefined) c[k] = String(p[k] == null ? '' : p[k]); });
     if (p.queueVisible !== undefined) c.queueVisible = !!p.queueVisible;
+    c.data = c.data || {};
+    ['publicName','queuePosition','estimatedStart','completedTitle','completedPrice','completedSize','completedBlocks','completedTime','completedDetails','queueVisible','completedGallery'].forEach(k => { if (c[k] !== undefined) c.data[k] = c[k]; });
     saveCommission_(c);
     return {commissions:commissions_()};
   }
@@ -347,11 +349,11 @@ function savePublicImage_(base64,name){
 function uploadCommissionImage_(p){
  const c=findCommission_(p.id);if(!c)throw new Error('Commission not found.');if(String(c.status).toLowerCase()!=='done')throw new Error('Only completed commissions can have public pictures.');
  if(String(p.data||'').length>40*1024*1024)throw new Error('Image is too large.');
- const f=savePublicImage_(p.data,String(p.name||'completed-build.jpg'));c.completedGallery=Array.isArray(c.completedGallery)?c.completedGallery:[];c.completedGallery.push(f);saveCommission_(c);return {commissions:commissions_()};
+ const f=savePublicImage_(p.data,String(p.name||'completed-build.jpg'));c.completedGallery=Array.isArray(c.completedGallery)?c.completedGallery:[];c.completedGallery.push(f);c.data=c.data||{};c.data.completedGallery=c.completedGallery;saveCommission_(c);return {commissions:commissions_()};
 }
 function removeCommissionImage_(p){
  const c=findCommission_(p.id);if(!c)throw new Error('Commission not found.');const arr=Array.isArray(c.completedGallery)?c.completedGallery:[];const f=arr.find(x=>String(x.id)===String(p.fileId));
- if(f){try{DriveApp.getFileById(f.id).setTrashed(true);}catch(e){}}c.completedGallery=arr.filter(x=>String(x.id)!==String(p.fileId));saveCommission_(c);return {commissions:commissions_()};
+ if(f){try{DriveApp.getFileById(f.id).setTrashed(true);}catch(e){}}c.completedGallery=arr.filter(x=>String(x.id)!==String(p.fileId));c.data=c.data||{};c.data.completedGallery=c.completedGallery;saveCommission_(c);return {commissions:commissions_()};
 }
 function publicFeedback_(req){
  const d=req.data||{},name=String(d.displayName||'').trim().slice(0,60),message=String(d.message||'').trim().slice(0,1200);if(!name||!message)throw new Error('Add a display name and feedback first.');

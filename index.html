@@ -856,6 +856,8 @@ function viewCommission(){
  else if (!open) main = `<div class="card"><p class="label">Commissions closed</p><h2 style="font-size:clamp(30px,3.6vw,44px)">Taking a short break.</h2><p style="color:var(--muted);margin-top:12px">${esc(s.closedNote)}</p><div class="actions"><a class="btn btn-moss" href="#vault">Explore the Vault</a><a class="btn btn-plain" ${out(s.discord)}>Follow on Discord</a></div></div>`;
  else main = `<div class="card"><form class="form" id="cform" novalidate>
    <label class="f">Your name <span class="req">*</span><input id="c-name" autocomplete="name" maxlength="80" required></label>
+   <label class="f">Public display name <span class="req">*</span><input id="c-public-name" maxlength="60" required placeholder="Name shown on the public queue"></label>
+   <label class="f">Profile picture <em>optional</em><input id="c-avatar" type="file" accept="image/*"></label>
    <label class="f">Gmail <span class="req">*</span><input id="c-gmail" type="email" autocomplete="email" placeholder="you@gmail.com" maxlength="120" required></label>
    <label class="f">Discord username <span class="req">*</span><input id="c-discord" placeholder="yourname" maxlength="60" required></label>
    <label class="f">What should I build? <span class="req">*</span><select id="c-type">${BUILD_TYPES.map(t => `<option>${t}</option>`).join('')}</select></label>
@@ -881,9 +883,12 @@ async function sendCommission(e){
  if (missing) { say('Please fill in every field marked *.', true); $('#' + missing).focus(); return; }
  if (!/^[a-z0-9._%+-]+@(gmail|googlemail)\.com$/i.test(v('c-gmail'))) { say('Please use a Gmail address (ending in @gmail.com).', true); $('#c-gmail').focus(); return; }
  if (!CONNECTED) { say('This form isn’t connected yet. The site owner needs to finish setup.', true); return; }
- const data = {name:v('c-name'), gmail:v('c-gmail'), discord:v('c-discord'), type:v('c-type'), platform:v('c-platform'), size:v('c-size'), budget:v('c-budget'), deadline:v('c-deadline'), idea:v('c-idea'), refs:v('c-refs')};
+ const avatarFile = $('#c-avatar').files[0];
+ if (avatarFile && avatarFile.size > 3 * 1048576) { say('Profile picture must be 3 MB or smaller.', true); return; }
+ const data = {name:v('c-name'), publicName:v('c-public-name'), gmail:v('c-gmail'), discord:v('c-discord'), type:v('c-type'), platform:v('c-platform'), size:v('c-size'), budget:v('c-budget'), deadline:v('c-deadline'), idea:v('c-idea'), refs:v('c-refs')};
  btn.disabled = true; say('Sending…');
  try {
+  if (avatarFile) { const encoded = await fileToBase64(avatarFile, true); data.avatarData = encoded.data; }
   const r = await post({action:'commission', data, hp:v('c-hp')});
   lastRequest = {name:data.name, gmail:data.gmail, ref:r.ref, confirmed:r.confirmed}; likeTitle = '';
   render(); scrollTo(0, 0);
@@ -915,7 +920,7 @@ async function loadSite(){
 /* =========================================================
    STUDIO MANAGER (password protected; changes save to your Google Sheet)
    ========================================================= */
-const M = {token:null, demo:false, tab:'inbox', comms:[], sel:null, filter:'active', q:'', mailFolder:'inbox', mailQ:'', publicComms:[], publicSel:null, publicLoaded:false, publicLoading:false, publicError:'', edit:null, ownerEmail:''};
+const M = {token:null, demo:false, tab:'inbox', comms:[], sel:null, filter:'active', q:'', mailFolder:'inbox', mailQ:'', publicComms:[], publicQueue:[], publicSel:null, publicLoaded:false, publicLoading:false, publicError:'', edit:null, ownerEmail:''};
 try { M.token = sessionStorage.getItem('pb_token'); } catch {}
 const SAMPLE = () => [
  {id:'PB-1003', received:new Date(Date.now() - 36e5).toISOString(), status:'New', name:'Sample: Alex', gmail:'alex.sample@gmail.com', discord:'alex_builds', type:'Creature or dragon', platform:'Xbox', size:'About 60 blocks long', budget:'$30', deadline:'', idea:'A Night Fury perched on a cliff, wings half open. (This is sample data so you can try the manager.)', refs:'', quote:'', notes:'', read:false, archived:false, thread:[]},
@@ -1109,6 +1114,7 @@ async function loadPublicCommissions(){
  try {
   const r = await post({action:'publicCommissions'});
   M.publicComms = Array.isArray(r.commissions) ? r.commissions : [];
+  M.publicQueue = Array.isArray(r.queue) ? r.queue : [];
   M.publicLoaded = true; M.publicLoading = false;
   if (!M.publicComms.some(c=>c.id===M.publicSel)) M.publicSel = null;
  } catch(e) { M.publicLoading = false; M.publicError = e.message || 'Could not load completed commissions.'; }

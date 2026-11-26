@@ -815,15 +815,21 @@ function viewHome(){
  </section>`;
 }
 let featuredTimer = null;
+let featuredQueue = [];
 function rotateFeatured(){
  const host=$('#featured-tiles'); if(!host)return;
- const list=builds(false); if(list.length<3)return;
- let cursor=list.findIndex(b=>b.id===featured()[0]?.id); if(cursor<0)cursor=0;
+ const list=builds(false), starting=featured();
+ if(list.length<4 || starting.length!==3)return;
+ const featuredIds=starting.map(b=>b.id);
+ // Keep the three current feature slots in order, then append the remaining Vault builds.
+ // Each cycle sends slot 1 to the back of the Vault queue and shifts slots 2 and 3 left.
+ featuredQueue=[...starting,...list.filter(b=>!featuredIds.includes(b.id))];
  featuredTimer=setInterval(()=>{
   const tiles=$('#featured-tiles [data-featured-slot]'); if(tiles.length!==3)return;
-  cursor=(cursor+1)%list.length;
-  const next=[0,1,2].map(i=>list[(cursor+i)%list.length]);
-  tiles.forEach((tile,i)=>tile.classList.add('rotating-out'));
+  const leaving=featuredQueue.shift();
+  featuredQueue.push(leaving);
+  const next=featuredQueue.slice(0,3);
+  tiles.forEach(tile=>tile.classList.add('rotating-out'));
   setTimeout(()=>{
    const live=$('#featured-tiles [data-featured-slot]');
    live.forEach((tile,i)=>{tile.outerHTML=featuredTile(next[i],i).replace('<a class="tile"','<a class="tile rotating-in"');});

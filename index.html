@@ -1010,6 +1010,48 @@ async function handleGoogleCredential(response) {
  } catch (err) { say('l-msg', err.message || 'Google sign-in failed.', true); }
 }
 
+
+function renderMemberGoogleSignIn(attempt) {
+ attempt=attempt||0; const host=$('#member-google-signin-button');
+ if(!host||M.userProfile)return;
+ if(!GOOGLE_CLIENT_ID){say('member-login-msg','Google sign-in is not configured yet. Ask the site owner to finish setup.',true);return;}
+ if(!window.google||!google.accounts||!google.accounts.id){if(attempt<24){setTimeout(()=>renderMemberGoogleSignIn(attempt+1),250);return;}say('member-login-msg','Google sign-in could not load. Refresh and try again.',true);return;}
+ host.innerHTML='';
+ google.accounts.id.initialize({client_id:GOOGLE_CLIENT_ID,callback:handleMemberGoogleCredential});
+ google.accounts.id.renderButton(host,{type:'standard',theme:'outline',size:'large',text:'continue_with',shape:'rectangular',logo_alignment:'left',width:280});
+}
+async function handleMemberGoogleCredential(response){
+ if(!response||!response.credential){say('member-login-msg','Google did not return a sign-in credential.',true);return;}
+ say('member-login-msg','Creating your profile…');
+ try{
+  const r=await post({action:'memberLogin',credential:response.credential});
+  M.userToken=r.token;M.userProfile=r.profile;
+  try{sessionStorage.setItem('pb_user_token',r.token);sessionStorage.setItem('pb_user_profile',JSON.stringify(r.profile));}catch{}
+  await loadMemberAccount();renderChrome();render();
+ }catch(err){say('member-login-msg',err.message||'Could not sign in.',true);}
+}
+async function loadMemberAccount(){
+ if(!M.userToken)return;
+ try{const r=await post({action:'profileGet',userToken:M.userToken});M.userProfile=r.profile||M.userProfile;M.memberData=r;try{sessionStorage.setItem('pb_user_profile',JSON.stringify(M.userProfile));}catch{}}
+ catch(err){if(err.signedOut){memberSignOut();}else throw err;}
+}
+function memberSignOut(){
+ M.userToken=null;M.userProfile=null;M.memberData=null;
+ try{sessionStorage.removeItem('pb_user_token');sessionStorage.removeItem('pb_user_profile');}catch{}
+ renderChrome();if(HASH==='account'||HASH==='commission')render();
+}
+function viewAccount(){
+ if(!M.userProfile)return `<section class="dark top"><div class="wrap"><p class="label">Pinnacle Builds account</p><h1>Your profile<span>.</span></h1><p class="intro">Sign in with Google to create a member profile. Your commissions, referrals, and feedback will be connected to the same account.</p></div></section><section class="sec cream edge-c"><div class="wrap"><div class="card" style="max-width:620px;margin:auto"><h2 style="font-size:36px">Welcome to the community.</h2><p style="color:var(--muted);margin:12px 0 20px">Use your Google account to sign in securely. No separate password to create.</p><div id="member-google-signin-button" style="min-height:48px"></div><p class="msg" id="member-login-msg" role="status"></p><p style="font-size:13px;color:var(--muted);margin-top:12px">Your email stays private and is used to manage requests and contact you.</p></div></div></section>`;
+ const p=M.userProfile,d=M.memberData||{},cs=d.commissions||[],items=d.community||[];
+ return `<section class="dark top"><div class="wrap"><p class="label">Pinnacle Builds account</p><h1>Your profile<span>.</span></h1><p class="intro">Your requests and community submissions are linked to this profile.</p></div></section><section class="sec cream edge-c"><div class="wrap" style="max-width:900px;display:grid;gap:20px">
+ <div class="card"><div style="display:flex;gap:16px;align-items:center;margin-bottom:22px">${p.picture&&https(p.picture)?`<img src="${esc(p.picture)}" alt="" style="width:68px;height:68px;border-radius:50%;object-fit:cover">`:`<span class="lv" style="width:68px;height:68px;font-size:30px">${esc((p.displayName||p.name||'P').slice(0,1).toUpperCase())}</span>`}<div><h2 style="font-size:30px">${esc(p.displayName||p.name)}</h2><p style="color:var(--muted)">${esc(p.email)}</p><small style="color:var(--muted)">Member ID: ${esc(p.id)}</small></div></div>
+ <form id="profile-form" class="form"><label class="f">Display name<input id="profile-display" maxlength="60" required value="${esc(p.displayName||p.name)}"></label><label class="f">Discord username <em>optional</em><input id="profile-discord" maxlength="60" value="${esc(p.discord||'')}"></label><div class="row-end"><button class="btn btn-moss" type="submit">Save profile</button><p class="msg" id="profile-msg" role="status"></p></div></form>
+ <div class="actions"><button class="btn btn-plain btn-sm" type="button" id="member-signout">Sign out</button><a class="btn btn-leaf btn-sm" href="#commission">Request a build</a></div></div>
+ <div class="card"><h3 style="font-size:26px">Your commissions (${cs.length})</h3>${cs.length?cs.map(c=>`<div style="padding:12px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:12px"><span><b>${esc(c.type)}</b><small style="display:block;color:var(--muted)">${esc(c.id)} · ${esc(niceDate(c.received))}</small></span><b>${esc(c.status)}</b></div>`).join(''):'<p style="color:var(--muted);margin-top:8px">No commission requests yet.</p>'}</div>
+ <div class="card"><h3 style="font-size:26px">Your referrals & feedback (${items.length})</h3>${items.length?items.map(x=>`<div style="padding:12px 0;border-bottom:1px solid var(--line)"><b>${esc(x.kind)} · ${esc(x.approved?'Published':'Awaiting review')}</b><p style="color:var(--muted);margin-top:4px">${esc(x.message)}</p></div>`).join(''):'<p style="color:var(--muted);margin-top:8px">No community submissions yet.</p>'}</div>
+ </div></section>`;
+}
+
 function viewManager(){
  if (!M.token && !M.demo) {
   if (!CONNECTED) return `<div class="setup"><p class="label">Studio manager</p><h2 style="font-size:36px">Not connected yet.</h2>
@@ -1283,6 +1325,7 @@ document.addEventListener('click', async e => {
  if (t.id === 'again') { lastRequest = null; render(); return; }
  if (t.id === 'demo') { M.demo = true; M.comms = SAMPLE(); demoSite = {settings:{}, featured:[], builds:[]}; applySite(demoSite); render(); return; }
  if (t.id === 'signout') { signOut(); return; }
+ if (t.id === 'member-signout') { memberSignOut(); return; }
  if (t.dataset.go) { navigate(t.dataset.go); return; }
  if (t.dataset.tab) { M.tab = t.dataset.tab; renderTab(); return; }
  if (t.dataset.mailFolder) { M.mailFolder = t.dataset.mailFolder; M.sel = null; renderCommissionList(); return; }
@@ -1377,6 +1420,7 @@ document.addEventListener('submit', async e => {
   return;
  }
  if (f.id === 'cform') return sendCommission(e);
+ if (f.id === 'profile-form') { const btn=f.querySelector('button[type="submit"]');btn.disabled=true;say('profile-msg','Saving…');try{const r=await post({action:'profileUpdate',userToken:M.userToken,data:{displayName:v('profile-display'),discord:v('profile-discord')}});M.userProfile=r.profile;await loadMemberAccount();renderChrome();render();}catch(err){say('profile-msg',err.message||'Could not save profile.',true);}finally{btn.disabled=false;}return; }
  if (f.id === 'cupd') return act('u-msg', () => call('updateCommission', {id:M.sel, status:v('u-status'), quote:v('u-quote'), notes:$('#u-notes').value}), 'Saved.');
  if (f.id === 'queueform') return act('q-msg', () => call('updateCommission', {id:M.sel, publicName:v('q-name'), queuePosition:v('q-position'), estimatedStart:v('q-start'), queueVisible:$('#q-visible').checked}), 'Public listing saved.');
  if (f.id === 'doneform') return act('d-msg', () => call('updateCommission', {id:M.sel, completedTitle:v('d-title'), completedPrice:v('d-price'), completedSize:v('d-size'), completedBlocks:v('d-blocks'), completedTime:v('d-time'), completedDetails:$('#d-details').value}), 'Completed project details saved.');
@@ -1406,16 +1450,18 @@ let HASH = (() => { try { return decodeURIComponent(location.hash.slice(1)); } c
 const SECTIONS = ['how','socials','featured','referrals'];
 function render(){
  const h = HASH;
- const view = h === 'vault' ? 'vault' : h.startsWith('build-') ? 'build' : h === 'commission' ? 'commission' : h === 'commission-list' ? 'commission-list' : h === 'manager' ? 'manager' : 'home';
+ const view = h === 'vault' ? 'vault' : h.startsWith('build-') ? 'build' : h === 'commission' ? 'commission' : h === 'commission-list' ? 'commission-list' : h === 'manager' ? 'manager' : h === 'account' ? 'account' : 'home';
  if (view !== 'build') gIndex = 0;
  if (view !== 'commission' && currentView === 'commission' && lastRequest) lastRequest = null;
  currentView = view;
  const main = $('#main');
- main.innerHTML = view === 'vault' ? viewVault() : view === 'build' ? viewBuild(h.slice(6)) : view === 'commission' ? viewCommission() : view === 'commission-list' ? viewCommissionList() : view === 'manager' ? viewManager() : viewHome();
+ main.innerHTML = view === 'vault' ? viewVault() : view === 'build' ? viewBuild(h.slice(6)) : view === 'commission' ? viewCommission() : view === 'commission-list' ? viewCommissionList() : view === 'manager' ? viewManager() : view === 'account' ? viewAccount() : viewHome();
  if (view === 'vault') renderVaultGrid();
  if (view === 'home') afterHome();
  if (view === 'manager' && (M.token || M.demo)) renderTab();
  if (view === 'manager' && !M.token && !M.demo) renderGoogleSignIn();
+ if (view === 'account' && !M.userProfile) renderMemberGoogleSignIn();
+ if (view === 'account' && M.userProfile && !M.memberData) loadMemberAccount().then(()=>{if(HASH==='account')render();}).catch(()=>{});
  if (view === 'commission-list') renderCommissionList();
  $('footer').hidden = view === 'manager' && !!(M.token || M.demo);
  const navKey = view !== 'home' ? (view === 'build' ? 'vault' : view) : (['how','socials'].includes(h) ? h : 'home');

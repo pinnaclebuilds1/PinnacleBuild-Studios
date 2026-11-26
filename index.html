@@ -799,10 +799,10 @@ function viewHome(){
     <div><p class="label">Client referrals</p><h2>From the people<span>I build for.</span></h2></div>
     <div class="community-grid">
      <section class="community-panel"><h3>Client feedback</h3><div id="public-feedback-list">${renderCommunityCards(remote.community && remote.community.feedback || [], 'feedback')}</div>
-      <form class="community-form" id="feedback-form"><h4>Leave feedback</h4><label class="f">Display name<input id="fb-name" maxlength="60" required placeholder="The name people will see"></label><label class="f">Profile picture <em>optional</em><input id="fb-avatar" type="file" accept="image/*"></label><label class="f">Your feedback<textarea id="fb-message" maxlength="1200" required placeholder="How was your experience?"></textarea></label><label class="hp" aria-hidden="true">Leave this empty<input id="fb-hp" tabindex="-1" autocomplete="off"></label><button class="btn btn-moss btn-sm" type="submit">Send feedback</button><p class="msg" id="fb-msg" role="status">Submissions are reviewed before appearing publicly.</p></form>
+      <form class="community-form" id="feedback-form"><h4>Leave feedback</h4><p class="sub">Posting as <b>${esc(M.userProfile ? M.userProfile.displayName : "signed-in member")}</b>. <a href="#account">Manage profile</a></p><label class="f">Your feedback<textarea id="fb-message" maxlength="1200" required placeholder="How was your experience?"></textarea></label><label class="hp" aria-hidden="true">Leave this empty<input id="fb-hp" tabindex="-1" autocomplete="off"></label><button class="btn btn-moss btn-sm" type="submit">Send feedback</button><p class="msg" id="fb-msg" role="status">Submissions are reviewed before appearing publicly.</p></form>
      </section>
      <section class="community-panel"><h3>Referrals</h3><div id="public-referral-list">${renderCommunityCards(remote.community && remote.community.referrals || [], 'referral')}</div>
-      <form class="community-form" id="referral-form"><h4>Refer someone</h4><label class="f">Display name<input id="rf-name" maxlength="60" required placeholder="The name people will see"></label><label class="f">Profile picture <em>optional</em><input id="rf-avatar" type="file" accept="image/*"></label><label class="f">Who are you referring, and why?<textarea id="rf-message" maxlength="1200" required placeholder="Share their name or Minecraft username and a little context."></textarea></label><label class="hp" aria-hidden="true">Leave this empty<input id="rf-hp" tabindex="-1" autocomplete="off"></label><button class="btn btn-moss btn-sm" type="submit">Send referral</button><p class="msg" id="rf-msg" role="status">Referrals are reviewed before appearing publicly.</p></form>
+      <form class="community-form" id="referral-form"><h4>Refer someone</h4><p class="sub">Posting as <b>${esc(M.userProfile ? M.userProfile.displayName : "signed-in member")}</b>. <a href="#account">Manage profile</a></p><label class="f">Who are you referring, and why?<textarea id="rf-message" maxlength="1200" required placeholder="Share their name or Minecraft username and a little context."></textarea></label><label class="hp" aria-hidden="true">Leave this empty<input id="rf-hp" tabindex="-1" autocomplete="off"></label><button class="btn btn-moss btn-sm" type="submit">Send referral</button><p class="msg" id="rf-msg" role="status">Referrals are reviewed before appearing publicly.</p></form>
      </section>
     </div>
    </div>
@@ -1408,6 +1408,7 @@ document.addEventListener('submit', async e => {
   const say=(t,err)=>{msg.textContent=t;msg.classList.toggle('err',!!err);};
   if(!M.userToken){say('Please sign in to submit this.',true);return;}
   if(!CONNECTED){say('The form is not connected yet.',true);return;}
+  if(!M.userToken||!M.userProfile){say('Please sign in to submit this.',true);return;}
   const data={displayName:M.userProfile.displayName,message:$('#'+prefix+'-message').value.trim()};
   if(!data.message){say('Add a message first.',true);return;}
   btn.disabled=true;say('Sending…');

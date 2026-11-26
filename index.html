@@ -739,7 +739,7 @@ function statChips(b){
 function renderChrome(){
  const s = S(), open = s.open !== 'false';
  $('#hdr-right').innerHTML = `<a class="sicon" ${out(s.discord)} aria-label="Discord">${fb('discord','D')}</a><a class="sicon" ${out(s.youtube)} aria-label="YouTube">${fb('youtube','Y')}</a><a class="sicon" ${out(s.x)} aria-label="X">${fb('x-twitter','X')}</a>
-  <a class="btn btn-plain btn-sm" href="#manager">${ic('lock')} Sign in</a><a class="btn btn-leaf" href="#commission">${ic('pen')} ${open ? 'Request a build' : 'Commissions'}</a>`;
+  <a class="btn btn-plain btn-sm" href="#account">${ic('user')} ${M.userProfile ? esc(M.userProfile.displayName || 'My account') : 'Sign in'}</a><a class="btn btn-leaf" href="#commission">${ic('pen')} ${open ? 'Request a build' : 'Commissions'}</a>`;
  $('#footer').innerHTML = `<div class="wrap foot">
   <div><a class="logo" href="#home"><span class="mark"><svg width="36" height="36" viewBox="4 4 56 56" fill="none" aria-hidden="true"><path d="M10 46 24 27l8 10 9-14 13 23M33 24l8-12 5 8" stroke="#39ff14" stroke-width="4" stroke-linecap="square" stroke-linejoin="round"/><path d="M16 51h32" stroke="#fffaf0" stroke-opacity=".5" stroke-width="2.4"/></svg></span><span class="wm"><b>Pinnacle<span>Builds</span></b><small>Bedrock build studio</small></span></a>
    <p class="bio">Dragons, creatures, and oversized fantasy houses, built by hand in Minecraft Bedrock.</p></div>
@@ -883,15 +883,15 @@ function viewCommission(){
    <li><span class="lv">3</span><div><b>We build it</b><p>Once we agree, I start building and send progress updates.</p></div></li></ol></div>
   <div class="card"><h3>Helpful to include</h3><ul class="tips"><li>Pictures or links of what you have in mind</li><li>A rough size, or where the build will go</li><li>Whether it’s for a world, Realm, or server</li><li>Any deadline</li></ul></div></aside>`;
  let main;
- if (lastRequest) main = `<div class="card done"><p class="label" style="justify-content:center">Request sent</p><h2>Thanks, ${esc(lastRequest.name)}!</h2><div class="ref">${esc(lastRequest.ref)}</div>
+ if (!M.userProfile) main = `<div class="card"><p class="label">Member account required</p><h2 style="font-size:clamp(30px,3.6vw,44px)">Sign in to request a build.</h2><p style="color:var(--muted);margin-top:12px">Create your free profile with Google. Your requests will stay linked to the same account, so repeat commissions are easy to recognize.</p><div class="actions"><a class="btn btn-leaf" href="#account">${ic('user')} Sign in or create profile</a></div></div>`;
+ else if (lastRequest) main = `<div class="card done"><p class="label" style="justify-content:center">Request sent</p><h2>Thanks, ${esc(lastRequest.name)}!</h2><div class="ref">${esc(lastRequest.ref)}</div>
    <p style="color:var(--muted);max-width:32em;margin:0 auto">That’s your reference number. I’ll reply to <b>${esc(lastRequest.gmail)}</b> with questions and a free estimate.${lastRequest.confirmed ? ' A copy of your request is in your Gmail.' : ''}</p>
    <div class="actions" style="justify-content:center"><a class="btn btn-moss" href="#vault">Explore the Vault</a><button class="btn btn-plain" type="button" id="again">Send another request</button></div></div>`;
  else if (!open) main = `<div class="card"><p class="label">Commissions closed</p><h2 style="font-size:clamp(30px,3.6vw,44px)">Taking a short break.</h2><p style="color:var(--muted);margin-top:12px">${esc(s.closedNote)}</p><div class="actions"><a class="btn btn-moss" href="#vault">Explore the Vault</a><a class="btn btn-plain" ${out(s.discord)}>Follow on Discord</a></div></div>`;
  else main = `<div class="card"><form class="form" id="cform" novalidate>
    <label class="f">Your name <span class="req">*</span><input id="c-name" autocomplete="name" maxlength="80" required></label>
-   <label class="f">Public display name <span class="req">*</span><input id="c-public-name" maxlength="60" required placeholder="Name shown on the public queue"></label>
-   <label class="f">Profile picture <em>optional</em><input id="c-avatar" type="file" accept="image/*"></label>
-   <label class="f">Gmail <span class="req">*</span><input id="c-gmail" type="email" autocomplete="email" placeholder="you@gmail.com" maxlength="120" required></label>
+   <label class="f">Public display name<input id="c-public-name" maxlength="60" value="${esc(M.userProfile.displayName || M.userProfile.name || '')}" readonly></label>
+   <label class="f">Gmail<input id="c-gmail" type="email" autocomplete="email" value="${esc(M.userProfile.email || '')}" readonly></label>
    <label class="f">Discord username <span class="req">*</span><input id="c-discord" placeholder="yourname" maxlength="60" required></label>
    <label class="f">What should I build? <span class="req">*</span><select id="c-type">${BUILD_TYPES.map(t => `<option>${t}</option>`).join('')}</select></label>
    <label class="f">Where will you play it? <em>optional</em><select id="c-platform">${PLATFORMS.map(t => `<option>${t}</option>`).join('')}</select></label>
@@ -912,17 +912,14 @@ async function sendCommission(e){
  e.preventDefault();
  const v = id => $('#' + id).value.trim(), msg = $('#c-msg'), btn = $('#c-send');
  const say = (t, err) => { msg.textContent = t; msg.classList.toggle('err', !!err); };
- const missing = ['c-name','c-gmail','c-discord','c-idea'].find(id => !v(id));
+ if (!M.userToken || !M.userProfile) { say('Please sign in to your account first.', true); return; }
+ const missing = ['c-name','c-discord','c-idea'].find(id => !v(id));
  if (missing) { say('Please fill in every field marked *.', true); $('#' + missing).focus(); return; }
- if (!/^[a-z0-9._%+-]+@(gmail|googlemail)\.com$/i.test(v('c-gmail'))) { say('Please use a Gmail address (ending in @gmail.com).', true); $('#c-gmail').focus(); return; }
  if (!CONNECTED) { say('This form isn’t connected yet. The site owner needs to finish setup.', true); return; }
- const avatarFile = $('#c-avatar').files[0];
- if (avatarFile && avatarFile.size > 3 * 1048576) { say('Profile picture must be 3 MB or smaller.', true); return; }
- const data = {name:v('c-name'), publicName:v('c-public-name'), gmail:v('c-gmail'), discord:v('c-discord'), type:v('c-type'), platform:v('c-platform'), size:v('c-size'), budget:v('c-budget'), deadline:v('c-deadline'), idea:v('c-idea'), refs:v('c-refs')};
+ const data = {name:v('c-name'), publicName:M.userProfile.displayName, gmail:M.userProfile.email, discord:v('c-discord'), type:v('c-type'), platform:v('c-platform'), size:v('c-size'), budget:v('c-budget'), deadline:v('c-deadline'), idea:v('c-idea'), refs:v('c-refs')};
  btn.disabled = true; say('Sending…');
  try {
-  if (avatarFile) { const encoded = await fileToBase64(avatarFile, true); data.avatarData = encoded.data; }
-  const r = await post({action:'commission', data, hp:v('c-hp')});
+  const r = await post({action:'commission', userToken:M.userToken, data, hp:v('c-hp')});
   lastRequest = {name:data.name, gmail:data.gmail, ref:r.ref, confirmed:r.confirmed}; likeTitle = '';
   render(); scrollTo(0, 0);
  } catch (err) { say(err.message || 'Could not send. Please try again.', true); btn.disabled = false; }
@@ -953,8 +950,8 @@ async function loadSite(){
 /* =========================================================
    STUDIO MANAGER (password protected; changes save to your Google Sheet)
    ========================================================= */
-const M = {token:null, demo:false, tab:'inbox', comms:[], sel:null, filter:'active', q:'', mailFolder:'inbox', mailQ:'', publicComms:[], publicQueue:[], publicSel:null, publicLoaded:false, publicLoading:false, publicError:'', edit:null, ownerEmail:'', profile:null, community:{feedback:[],referrals:[]}};
-try { M.token = sessionStorage.getItem('pb_token'); M.profile = JSON.parse(sessionStorage.getItem('pb_profile') || 'null'); } catch {}
+const M = {token:null, userToken:null, userProfile:null, memberData:null, demo:false, tab:'inbox', comms:[], sel:null, filter:'active', q:'', mailFolder:'inbox', mailQ:'', publicComms:[], publicQueue:[], publicSel:null, publicLoaded:false, publicLoading:false, publicError:'', edit:null, ownerEmail:'', profile:null, community:{feedback:[],referrals:[]}};
+try { M.token = sessionStorage.getItem('pb_token'); M.profile = JSON.parse(sessionStorage.getItem('pb_profile') || 'null'); M.userToken=sessionStorage.getItem('pb_user_token'); M.userProfile=JSON.parse(sessionStorage.getItem('pb_user_profile') || 'null'); } catch {}
 const SAMPLE = () => [
  {id:'PB-1003', received:new Date(Date.now() - 36e5).toISOString(), status:'New', name:'Sample: Alex', gmail:'alex.sample@gmail.com', discord:'alex_builds', type:'Creature or dragon', platform:'Xbox', size:'About 60 blocks long', budget:'$30', deadline:'', idea:'A Night Fury perched on a cliff, wings half open. (This is sample data so you can try the manager.)', refs:'', quote:'', notes:'', read:false, archived:false, thread:[]},
  {id:'PB-1002', received:new Date(Date.now() - 864e5 * 2).toISOString(), status:'Quoted', name:'Sample: Jordan', gmail:'jordan.sample@gmail.com', discord:'jordo', type:'House or building', platform:'Windows / PC', size:'Two-story house', budget:'Not sure', deadline:'', idea:'A cozy wizard tower with a library inside. (Sample data.)', refs:'', quote:'$45', notes:'Asked for reference pictures.', read:true, archived:false, thread:[{at:new Date(Date.now() - 864e5).toISOString(), subject:'Re: your wizard tower', text:'Hey Jordan! A tower like that would be about $45. Do you have pictures of the style you like?'}]},

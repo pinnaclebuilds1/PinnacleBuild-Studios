@@ -1266,7 +1266,7 @@ document.addEventListener('change', async e => {
  const inp = e.target;
  if (inp.dataset && inp.dataset.upCommission && inp.files.length) {
   const commission = M.comms.find(x => x.id === M.sel); if (!commission) return;
-  try { for (const file of [...inp.files]) { if (file.size > 30 * 1048576) throw new Error('Each image must be 30 MB or smaller.'); const enc = await fileToBase64(file, true); await call('uploadCommissionImage', {id:commission.id, name:file.name.replace(/\\.\\w+$/, '.jpg'), data:enc.data}); } const fresh=await call('commissions'); M.comms=fresh.commissions || M.comms; renderTab(); }
+  try { for (const file of [...inp.files]) { if (file.size > 30 * 1048576) throw new Error('Each image must be 30 MB or smaller.'); const enc = await fileToBase64(file, true); await call('uploadCommissionImage', {id:commission.id, name:file.name.replace(/\.\w+$/, '.jpg'), data:enc.data}); } const fresh=await call('commissions'); M.comms=fresh.commissions || M.comms; renderTab(); }
   catch(err) { const msg=$('#done-upload-msg'); if(msg) msg.textContent=err.message || 'Picture upload failed.'; }
   return;
  }

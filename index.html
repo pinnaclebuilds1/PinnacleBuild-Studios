@@ -682,7 +682,17 @@ const $$ = s => [...document.querySelectorAll(s)];
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ic = n => `<svg class="ic" aria-hidden="true"><use href="#i-${n}"/></svg>`;
 const https = u => (typeof u === 'string' && /^https:\/\/[^\s"'<>]+$/i.test(u)) ? u : '';
-const imgOk = u => (typeof u === 'string' && (u.startsWith('data:image/') || u.startsWith('blob:') || https(u))) ? u : '';
+const imgOk = u => {
+ if (typeof u !== 'string') return '';
+ if (u.startsWith('data:image/') || u.startsWith('blob:')) return u;
+ // Google Drive's old uc?export=view links can render as an HTML preview instead
+ // of an image. Use Drive's image thumbnail endpoint for embeds, including old uploads.
+ if (/^https:\/\/drive\.google\.com\//i.test(u)) {
+  const id = /(?:[?&]id=|\/d\/)([A-Za-z0-9_-]+)/i.exec(u);
+  if (id) return 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(id[1]) + '&sz=w1600';
+ }
+ return https(u) ? u : '';
+};
 const out = href => `href="${esc(href)}" target="_blank" rel="noopener"`;
 const fb = (name, l) => `<i class="fb fa-brands fa-${name}" data-l="${l}"></i>`;
 const paras = t => String(t || '').split(/\n\s*\n/).map(p => p.trim()).filter(Boolean).map(p => `<p>${esc(p).replace(/\n/g, '<br>')}</p>`).join('');

@@ -1053,6 +1053,7 @@ function paneCommission(c){
    <label class="f full">Private notes <em>only you see these</em><textarea id="u-notes" maxlength="4000" style="min-height:90px">${esc(c.notes)}</textarea></label>
    <div class="row-end"><button class="btn btn-moss btn-sm" type="submit">${ic('check')} Save</button><p class="msg" id="u-msg" role="status"></p></div></form>
   <p class="ph">Public queue listing</p><form class="mform" id="queueform"><label class="f">Public display name<input id="q-name" maxlength="60" value="${esc(c.publicName || c.name || '')}"></label><label class="f">Queue position<input id="q-position" type="number" min="1" max="999" value="${esc(c.queuePosition || '')}"></label><label class="f">Estimated start date<input id="q-start" type="date" value="${esc(c.estimatedStart || '')}"></label><label class="check"><input id="q-visible" type="checkbox"${c.queueVisible === false ? '' : ' checked'}> Show in public queue</label><div class="row-end"><button class="btn btn-moss btn-sm" type="submit">Save public listing</button><p class="msg" id="q-msg"></p></div></form>
+  ${c.status === 'Done' ? '<div class="fslot"><h4>Completed build pictures</h4><input type="file" accept="image/*" multiple data-up-commission><p id="done-upload-msg" class="msg"></p></div>' : ''}
   <p class="ph">Reply by email</p>
   <form class="mform" id="creply"><label class="f full">Subject<input id="r-sub" maxlength="150" value="${esc('Your PinnacleBuild-Studios commission (' + c.id + ')')}"></label>
    <label class="f full">Message<textarea id="r-msg" maxlength="6000" placeholder="Hi ${esc(c.name.replace(/^Sample: /, ''))}, thanks for your request!"></textarea></label>
@@ -1261,7 +1262,14 @@ document.addEventListener('click', async e => {
 function buildPayload(b){ return {id:b.id, title:b.title, category:b.category, tagline:b.tagline, story:b.story, time:b.time, blocks:b.blocks, size:b.size, finished:b.finished, edition:b.edition, tags:(b.tags || []).join(', '), link:b.link, hidden:b.hidden}; }
 
 document.addEventListener('change', async e => {
- const inp = e.target; if (!inp.dataset || !inp.dataset.up || !inp.files.length) return;
+ const inp = e.target;
+ if (inp.dataset && inp.dataset.upCommission && inp.files.length) {
+  const commission = M.comms.find(x => x.id === M.sel); if (!commission) return;
+  try { for (const file of [...inp.files]) { if (file.size > 30 * 1048576) throw new Error('Each image must be 30 MB or smaller.'); const enc = await fileToBase64(file, true); await call('uploadCommissionImage', {id:commission.id, name:file.name.replace(/\\.\\w+$/, '.jpg'), data:enc.data}); } const fresh=await call('commissions'); M.comms=fresh.commissions || M.comms; renderTab(); }
+  catch(err) { const msg=$('#done-upload-msg'); if(msg) msg.textContent=err.message || 'Picture upload failed.'; }
+  return;
+ }
+ if (!inp.dataset || !inp.dataset.up || !inp.files.length) return;
  const kind = inp.dataset.up, b = builds(true).find(x => x.id === M.edit), files = [...inp.files];
  const isImg = kind === 'cover' || kind === 'gallery';
  try {

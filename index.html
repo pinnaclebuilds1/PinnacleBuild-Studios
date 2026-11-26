@@ -1089,7 +1089,7 @@ function paneCommission(c){
    <label class="f full">Public build details<textarea id="d-details" maxlength="5000" style="min-height:130px" placeholder="What you built, special details, materials, and what makes it unique.">${esc(c.completedDetails||'')}</textarea></label>
    <div class="row-end"><button class="btn btn-moss btn-sm" type="submit">Save completed details</button><p class="msg" id="d-msg"></p></div></form>` : ''}
 
-  ${c.status === 'Done' ? '<div class="fslot"><h4>Completed build pictures</h4><input type="file" accept="image/*" multiple data-up-commission><p id="done-upload-msg" class="msg"></p></div>' : ''}
+  ${c.status === 'Done' ? `<div class="fslot"><h4>Completed build pictures</h4><div class="gthumbs">${(c.completedGallery||[]).map(g=>`<figure><img src="${esc(imgOk(g.url))}" alt=""><button class="btn btn-danger btn-sm" type="button" data-rm-commission-image="${esc(g.id)}">Remove</button></figure>`).join('')||'<span style="color:var(--muted)">No pictures uploaded yet</span>'}</div><label class="btn btn-plain btn-sm" style="justify-self:start">Add pictures<input type="file" accept="image/*" multiple data-up-commission hidden></label><p id="done-upload-msg" class="msg"></p></div>` : ''}
   <p class="ph">Reply by email</p>
   <form class="mform" id="creply"><label class="f full">Subject<input id="r-sub" maxlength="150" value="${esc('Your PinnacleBuild-Studios commission (' + c.id + ')')}"></label>
    <label class="f full">Message<textarea id="r-msg" maxlength="6000" placeholder="Hi ${esc(c.name.replace(/^Sample: /, ''))}, thanks for your request!"></textarea></label>
@@ -1280,11 +1280,19 @@ document.addEventListener('click', async e => {
  if (t.dataset.tab) { M.tab = t.dataset.tab; renderTab(); return; }
  if (t.dataset.mailFolder) { M.mailFolder = t.dataset.mailFolder; M.sel = null; renderCommissionList(); return; }
  if (t.dataset.filter) { M.filter = t.dataset.filter; renderTab(); return; }
+ if (t.dataset.rmCommissionImage) {
+  const id=M.sel, fileId=t.dataset.rmCommissionImage;
+  if(!id)return;
+  try { const r=await call('removeCommissionImage',{id,fileId}); M.comms=r.commissions||M.comms; renderTab(); }
+  catch(err){ const m=$('#done-upload-msg'); if(m)m.textContent=err.message||'Could not remove picture.'; }
+  return;
+ }
  if (t.id === 'community-refresh') { const r=await call('community'); M.community=r.community||{feedback:[],referrals:[]}; renderTab(); return; }
  if (t.dataset.communityApprove || t.dataset.communityHide || t.dataset.communityDelete) {
   const id=t.dataset.communityApprove||t.dataset.communityHide||t.dataset.communityDelete, kind=t.dataset.communityKind;
   const payload={id,kind,approved:!!t.dataset.communityApprove,remove:!!t.dataset.communityDelete};
-  await act('community-msg',()=>call('moderateCommunity',payload),'Saved moderation change.');
+  try { const r=await call('moderateCommunity',payload); M.community=r.community||M.community; renderTab(); }
+  catch(err) { const el=$('#mtab'); if(el) el.insertAdjacentHTML('afterbegin','<p class="banner">'+esc(err.message||'Could not save moderation change.')+'</p>'); }
   return;
  }
  if (t.id === 'save-ai-knowledge') { const approved = $('[data-ai-approve]:checked').map(x => x.dataset.aiApprove); await act('ai-kb-msg', () => call('saveSettings', {settings:{aiApprovedCommissions:JSON.stringify(approved)}}), 'Saved. The public AI may reference only these approved projects.'); return; }

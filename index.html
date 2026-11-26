@@ -825,13 +825,13 @@ function rotateFeatured(){
  // Each cycle sends slot 1 to the back of the Vault queue and shifts slots 2 and 3 left.
  featuredQueue=[...starting,...list.filter(b=>!featuredIds.includes(b.id))];
  featuredTimer=setInterval(()=>{
-  const tiles=$('#featured-tiles [data-featured-slot]'); if(tiles.length!==3)return;
+  const tiles=$( '#featured-tiles [data-featured-slot]' ); if(tiles.length!==3)return;
   const leaving=featuredQueue.shift();
   featuredQueue.push(leaving);
   const next=featuredQueue.slice(0,3);
   tiles.forEach(tile=>tile.classList.add('rotating-out'));
   setTimeout(()=>{
-   const live=$('#featured-tiles [data-featured-slot]');
+   const live=$( '#featured-tiles [data-featured-slot]' );
    live.forEach((tile,i)=>{tile.outerHTML=featuredTile(next[i],i).replace('<a class="tile"','<a class="tile rotating-in"');});
    $('#featured-tiles .rotating-in').forEach(tile=>tile.classList.remove('rotating-in'));
   },1000);

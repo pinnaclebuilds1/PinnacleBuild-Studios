@@ -1,6 +1,6 @@
 /**
  * PinnacleBuild-Studios backend for Google Apps Script.
- * Attach this script to a Google Sheet, run setupSite(), setManagerPassword(),
+ * Attach this script to a Google Sheet, run setupSite(), then setGoogleClientId().
  * then deploy as a Web app (Execute as: Me; access: Anyone).
  */
 
@@ -9,13 +9,14 @@ const PB = {
   BUILDS: 'Builds',
   SETTINGS: 'Settings',
   FOLDER: 'PinnacleBuild-Studios Uploads',
-  TOKEN_TTL: 21600
+  TOKEN_TTL: 3600,
+  OWNER_EMAIL: 'pinnaclebuilds1@gmail.com'
 };
 
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('PinnacleBuild-Studios')
     .addItem('1. Set up the site', 'setupSite')
-    .addItem('2. Set manager password', 'setManagerPassword')
+    .addItem('2. Set Google OAuth client ID', 'setGoogleClientId')
     .addToUi();
 }
 
@@ -25,6 +26,8 @@ function setupSite() {
   ensureSheet_(ss, PB.COMMISSIONS, ['id','received','status','data','quote','notes','read','archived','thread']);
   ensureSheet_(ss, PB.BUILDS, ['id','data']);
   ensureSheet_(ss, PB.SETTINGS, ['key','value']);
+  ensureSheet_(ss, 'Feedback', ['id','created','displayName','avatarUrl','message','approved']);
+  ensureSheet_(ss, 'Referrals', ['id','created','displayName','avatarUrl','message','approved']);
   const props = PropertiesService.getScriptProperties();
   props.setProperty('PB_SPREADSHEET_ID', ss.getId());
 
@@ -39,26 +42,22 @@ function setupSite() {
   }
   const settings = readSettings_();
   if (!settings.confirm) writeSetting_('confirm', 'true');
-  SpreadsheetApp.getUi().alert('Setup complete. Next choose PinnacleBuild-Studios → 2. Set manager password.');
+  SpreadsheetApp.getUi().alert('Setup complete. Next choose PinnacleBuild-Studios → 2. Set Google OAuth client ID.');
 }
 
-function setManagerPassword() {
+function setGoogleClientId() {
   const ui = SpreadsheetApp.getUi();
-  const response = ui.prompt('Set Studio Manager password',
-    'Choose a password with at least 10 characters. It will not be stored as plain text.',
+  const response = ui.prompt('Set Google OAuth client ID',
+    'Paste the OAuth Client ID ending in .apps.googleusercontent.com. Do not paste a client secret.',
     ui.ButtonSet.OK_CANCEL);
   if (response.getSelectedButton() !== ui.Button.OK) return;
-  const password = response.getResponseText();
-  if (password.length < 10) {
-    ui.alert('Password must be at least 10 characters. Run this menu item again.');
+  const clientId = response.getResponseText().trim();
+  if (!/^[0-9A-Za-z._-]+\.apps\.googleusercontent\.com$/.test(clientId)) {
+    ui.alert('That does not look like a Google OAuth Web Client ID. Nothing was changed.');
     return;
   }
-  const salt = Utilities.getUuid();
-  PropertiesService.getScriptProperties().setProperties({
-    PB_PASSWORD_SALT: salt,
-    PB_PASSWORD_HASH: hash_(salt + password)
-  });
-  ui.alert('Manager password saved. Keep it private.');
+  PropertiesService.getScriptProperties().setProperty('PB_GOOGLE_CLIENT_ID', clientId);
+  ui.alert('Google OAuth Client ID saved. The website will read it automatically.');
 }
 
 function doGet(e) {
@@ -78,10 +77,14 @@ function doPost(e) {
   }
 }
 
+// AI integration is intentionally server-side only. API credentials belong in
+// Script Properties (OPENAI_API_KEY / OPENAI_MODEL), never in index.html.
 function route_(req) {
   if (req.action === 'commission') return createCommission_(req);
-  if (req.action === 'login') return login_(req.password);
-  // Public, read-only feed. Never expose customer identity, contact data, or private manager fields.
+  if (req.action === 'publicFeedback') return publicFeedback_(req);
+  if (req.action === 'publicReferral') return publicReferral_(req);
+  if (req.action === 'googleLogin') return googleLogin_(req.credential);
+  // Public read-only feed: exposes completed project details only, never customer contact data.
   if (req.action === 'publicCommissions') return publicCommissions_();
   if (req.action === 'admin') {
     requireAuth_(req.token);
@@ -99,6 +102,12 @@ function createCommission_(req) {
   });
   if (!/^[a-z0-9._%+-]+@(gmail|googlemail)\.com$/i.test(String(d.gmail))) {
     throw new Error('Please use a Gmail address.');
+  }
+  d.publicName = String(d.publicName || d.name || '').trim().slice(0,60);
+  if (d.avatarData) {
+    if (String(d.avatarData).length > 4 * 1024 * 1024) throw new Error('Profile picture is too large. Choose a smaller image.');
+    const avatar = savePublicImage_(d.avatarData, 'profile-' + Utilities.getUuid().slice(0,8) + '.jpg');
+    d.avatarUrl = avatar.url; delete d.avatarData;
   }
   const id = 'PB-' + Utilities.getUuid().slice(0,8).toUpperCase();
   const received = new Date().toISOString();
@@ -143,19 +152,36 @@ function createCommission_(req) {
   return {ref:id, confirmed:confirmed};
 }
 
-function login_(password) {
+function googleLogin_(credential) {
   const props = PropertiesService.getScriptProperties();
-  const salt = props.getProperty('PB_PASSWORD_SALT');
-  const expected = props.getProperty('PB_PASSWORD_HASH');
-  if (!salt || !expected) throw new Error('Studio manager is not set up yet. Run the password setup from the Google Sheet.');
-  if (hash_(salt + String(password || '')) !== expected) throw new Error('Incorrect password.');
+  const clientId = String(props.getProperty('PB_GOOGLE_CLIENT_ID') || '').trim();
+  if (!clientId) throw new Error('Google sign-in is not configured yet. Set the Google OAuth client ID from the spreadsheet menu.');
+  const idToken = String(credential || '').trim();
+  if (!idToken || idToken.length > 12000) throw new Error('Google sign-in did not return a valid credential.');
+  const url = 'https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(idToken);
+  const response = UrlFetchApp.fetch(url, {muteHttpExceptions:true});
+  if (response.getResponseCode() !== 200) throw new Error('Google could not verify this sign-in. Please try again.');
+  let claims;
+  try { claims = JSON.parse(response.getContentText()); }
+  catch (e) { throw new Error('Google returned an unreadable sign-in response.'); }
+  const email = String(claims.email || '').trim().toLowerCase();
+  const issuer = String(claims.iss || '');
+  const expiry = Number(claims.exp || 0);
+  const now = Math.floor(Date.now() / 1000);
+  const verified = claims.email_verified === true || String(claims.email_verified) === 'true';
+  if (claims.aud !== clientId || !['accounts.google.com','https://accounts.google.com'].includes(issuer) ||
+      !claims.sub || !verified || !expiry || expiry <= now) {
+    throw new Error('Google sign-in could not be validated. Please try again.');
+  }
+  if (email !== PB.OWNER_EMAIL) throw new Error('This Google account does not have owner access to Pinnacle Builds.');
   const token = Utilities.getUuid() + Utilities.getUuid();
-  CacheService.getScriptCache().put('PB_TOKEN_' + token, '1', PB.TOKEN_TTL);
-  return {token:token};
+  const ttl = Math.max(60, Math.min(PB.TOKEN_TTL, expiry - now));
+  CacheService.getScriptCache().put('PB_TOKEN_' + token, email, ttl);
+  return {token:token, email:email};
 }
 
 function requireAuth_(token) {
-  if (!token || CacheService.getScriptCache().get('PB_TOKEN_' + token) !== '1') {
+  if (!token || CacheService.getScriptCache().get('PB_TOKEN_' + token) !== PB.OWNER_EMAIL) {
     const err = new Error('Your session expired. Please sign in again.');
     err.signedOut = true;
     throw err;
@@ -164,6 +190,8 @@ function requireAuth_(token) {
 
 function admin_(op, p) {
   if (op === 'load') return {site:siteData_(), commissions:commissions_()};
+  if (op === 'community') return {community:communitySubmissions_()};
+  if (op === 'moderateCommunity') return moderateCommunity_(p);
   if (op === 'commissions') return {commissions:commissions_()};
   if (op === 'updateCommission') {
     const c = findCommission_(p.id);
@@ -173,6 +201,10 @@ function admin_(op, p) {
     if (p.notes !== undefined) c.notes = p.notes;
     if (p.read !== undefined) c.read = !!p.read;
     if (p.archived !== undefined) c.archived = !!p.archived;
+    ['publicName','queuePosition','estimatedStart','completedTitle','completedPrice','completedSize','completedBlocks','completedTime','completedDetails'].forEach(k => { if (p[k] !== undefined) c[k] = String(p[k] == null ? '' : p[k]); });
+    if (p.queueVisible !== undefined) c.queueVisible = !!p.queueVisible;
+    c.data = c.data || {};
+    ['publicName','queuePosition','estimatedStart','completedTitle','completedPrice','completedSize','completedBlocks','completedTime','completedDetails','queueVisible','completedGallery'].forEach(k => { if (c[k] !== undefined) c.data[k] = c[k]; });
     saveCommission_(c);
     return {commissions:commissions_()};
   }
@@ -211,6 +243,8 @@ function admin_(op, p) {
   }
   if (op === 'upload') return upload_(p);
   if (op === 'removeFile') return removeFile_(p);
+  if (op === 'uploadCommissionImage') return uploadCommissionImage_(p);
+  if (op === 'removeCommissionImage') return removeCommissionImage_(p);
   if (op === 'saveSettings') {
     Object.keys(p.settings || {}).forEach(k => writeSetting_(k, p.settings[k]));
     return {site:siteData_()};
@@ -219,15 +253,7 @@ function admin_(op, p) {
     writeSetting_('featured', JSON.stringify(p.ids || []));
     return {site:siteData_()};
   }
-  if (op === 'changePassword') {
-    const props = PropertiesService.getScriptProperties();
-    const salt = props.getProperty('PB_PASSWORD_SALT') || '';
-    if (hash_(salt + String(p.current || '')) !== props.getProperty('PB_PASSWORD_HASH')) throw new Error('Current password is incorrect.');
-    if (String(p.next || '').length < 10) throw new Error('New password must be at least 10 characters.');
-    const nextSalt = Utilities.getUuid();
-    props.setProperties({PB_PASSWORD_SALT:nextSalt, PB_PASSWORD_HASH:hash_(nextSalt + p.next)});
-    return {};
-  }
+
   throw new Error('Unknown manager action.');
 }
 
@@ -268,7 +294,9 @@ function removeFile_(p) {
 function publicSite_() {
   const s = siteData_();
   const settings = s.settings || {};
-  return {settings:settings, featured:s.featured || [], builds:(s.builds || []).filter(b => !b.hidden)};
+  return {settings:settings, featured:s.featured || [], builds:(s.builds || []).filter(b => !b.hidden),
+    community:publishedCommunity_(),
+    googleClientId:String(PropertiesService.getScriptProperties().getProperty('PB_GOOGLE_CLIENT_ID') || '')};
 }
 
 function siteData_() {
@@ -301,32 +329,81 @@ function commissions_() {
   return out.reverse();
 }
 
-// Public projection for the completed-project showcase.
-// Deliberately allow-list fields; never return name, Gmail, Discord, notes, quote,
-// archived/read flags, message threads, or the original customer data object.
+// Safe public projection of completed commissions. Do not return name, Gmail,
+// Discord, private notes, quote, email thread, or the original data object.
 function publicCommissions_() {
-  const allowedText = (v, max) => String(v == null ? '' : v).slice(0, max);
-  return {commissions: commissions_()
-    .filter(c => String(c.status || '').toLowerCase() === 'done' && !c.archived)
-    .map(c => ({
-      id: allowedText(c.id, 40),
-      received: c.received || '',
-      status: 'Done',
-      title: allowedText(c.title || c.projectTitle || c.type, 120),
-      type: allowedText(c.type, 100),
-      platform: allowedText(c.platform, 80),
-      size: allowedText(c.size, 100),
-      budget: allowedText(c.budget, 80),
-      deadline: allowedText(c.deadline, 80),
-      idea: allowedText(c.idea, 5000),
-      refs: allowedText(c.refs, 3000),
-      // Optional, explicitly public-facing fields for richer completion write-ups.
-      completedDetails: allowedText(c.completedDetails || c.workSummary || c.completionNotes, 8000),
-      gallery: Array.isArray(c.gallery) ? c.gallery.slice(0, 12).map(g => ({
-        url: allowedText(g && g.url, 1000),
-        alt: allowedText(g && g.alt, 160)
-      })).filter(g => /^https:\\/\\//i.test(g.url)) : []
-    }))};
+  const rows=commissions_().filter(c=>!c.archived);
+  const done=rows.filter(c=>String(c.status).toLowerCase()==='done').map(c=>({
+    id:String(c.id||''),received:c.received||'',status:'Done',publicName:String(c.publicName||c.name||'Minecraft builder'),avatarUrl:String(c.avatarUrl||''),
+    title:String(c.completedTitle||c.type||'Minecraft build'),type:String(c.type||''),platform:String(c.platform||''),size:String(c.completedSize||c.size||''),
+    budget:String(c.budget||''),deadline:String(c.deadline||''),idea:String(c.idea||''),refs:String(c.refs||''),completedPrice:String(c.completedPrice||''),
+    completedBlocks:String(c.completedBlocks||''),completedTime:String(c.completedTime||''),completedDetails:String(c.completedDetails||''),
+    gallery:Array.isArray(c.completedGallery)?c.completedGallery.map(x=>({id:String(x.id||''),url:String(x.url||'')})).filter(x=>/^https:\/\//i.test(x.url)):[]
+  }));
+  const queue=rows.filter(c=>!['done','declined'].includes(String(c.status).toLowerCase())&&c.queueVisible!==false)
+    .sort((a,b)=>(Number(a.queuePosition)||9999)-(Number(b.queuePosition)||9999)||new Date(a.received)-new Date(b.received))
+    .map((c,i)=>({displayName:String(c.publicName||c.name||'Commission'),avatarUrl:String(c.avatarUrl||''),position:Number(c.queuePosition)||i+1,estimatedStart:String(c.estimatedStart||''),status:String(c.status||'Received'),type:String(c.type||'Minecraft build')}));
+  return {commissions:done,queue:queue};
+}
+function savePublicImage_(base64,name){
+ const folderId=PropertiesService.getScriptProperties().getProperty('PB_FOLDER_ID'); if(!folderId) throw new Error('Upload folder is not set up. Run setupSite first.');
+ const bytes=Utilities.base64Decode(String(base64).replace(/^data:[^,]+,/,''));
+ const file=DriveApp.getFolderById(folderId).createFile(Utilities.newBlob(bytes,'image/jpeg',name));
+ file.setSharing(DriveApp.Access.ANYONE_WITH_LINK,DriveApp.Permission.VIEW);
+ return {id:file.getId(),url:'https://drive.google.com/uc?export=view&id='+file.getId()};
+}
+function uploadCommissionImage_(p){
+ const c=findCommission_(p.id);if(!c)throw new Error('Commission not found.');if(String(c.status).toLowerCase()!=='done')throw new Error('Only completed commissions can have public pictures.');
+ if(String(p.data||'').length>40*1024*1024)throw new Error('Image is too large.');
+ const f=savePublicImage_(p.data,String(p.name||'completed-build.jpg'));c.completedGallery=Array.isArray(c.completedGallery)?c.completedGallery:[];c.completedGallery.push(f);c.data=c.data||{};c.data.completedGallery=c.completedGallery;saveCommission_(c);return {commissions:commissions_()};
+}
+function removeCommissionImage_(p){
+ const c=findCommission_(p.id);if(!c)throw new Error('Commission not found.');const arr=Array.isArray(c.completedGallery)?c.completedGallery:[];const f=arr.find(x=>String(x.id)===String(p.fileId));
+ if(f){try{DriveApp.getFileById(f.id).setTrashed(true);}catch(e){}}c.completedGallery=arr.filter(x=>String(x.id)!==String(p.fileId));c.data=c.data||{};c.data.completedGallery=c.completedGallery;saveCommission_(c);return {commissions:commissions_()};
+}
+function publicFeedback_(req){ return saveCommunitySubmission_('Feedback', req); }
+function publicReferral_(req){ return saveCommunitySubmission_('Referrals', req); }
+function saveCommunitySubmission_(kind, req){
+  const d=req.data||{}, name=String(d.displayName||'').trim().slice(0,60), message=String(d.message||'').trim().slice(0,1200);
+  if(String(req.hp||'').trim()) throw new Error('Request could not be accepted.');
+  if(!name||!message) throw new Error('Add a display name and a message first.');
+  let avatar='';
+  if(d.avatarData){
+    if(String(d.avatarData).length>4*1024*1024) throw new Error('Profile picture is too large. Choose a smaller image.');
+    avatar=savePublicImage_(d.avatarData,kind.toLowerCase()+'-'+Utilities.getUuid().slice(0,8)+'.jpg').url;
+  }
+  const ss=SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('PB_SPREADSHEET_ID'));
+  const sh=ensureSheet_(ss,kind,['id','created','displayName','avatarUrl','message','approved']);
+  const id=(kind==='Feedback'?'FB-':'RF-')+Utilities.getUuid().slice(0,8).toUpperCase();
+  sh.appendRow([id,new Date().toISOString(),name,avatar,message,false]);
+  return {ok:true,id:id,message:'Thanks! Your submission was sent for review.'};
+}
+function readCommunitySheet_(kind){
+  const ss=SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('PB_SPREADSHEET_ID'));
+  const sh=ensureSheet_(ss,kind,['id','created','displayName','avatarUrl','message','approved']);
+  const values=sh.getDataRange().getValues(),out=[];
+  for(let i=1;i<values.length;i++){
+    if(!values[i][0])continue;
+    out.push({id:String(values[i][0]),created:String(values[i][1]||''),displayName:String(values[i][2]||'Visitor'),
+      avatarUrl:String(values[i][3]||''),message:String(values[i][4]||''),approved:values[i][5]===true||String(values[i][5])==='true',kind:kind==='Feedback'?'feedback':'referral'});
+  }
+  return out.reverse();
+}
+function communitySubmissions_(){return {feedback:readCommunitySheet_('Feedback'),referrals:readCommunitySheet_('Referrals')};}
+function publishedCommunity_(){
+  const c=communitySubmissions_();
+  return {feedback:c.feedback.filter(x=>x.approved),referrals:c.referrals.filter(x=>x.approved)};
+}
+function moderateCommunity_(p){
+  const kind=p.kind==='referral'?'Referrals':p.kind==='feedback'?'Feedback':'';
+  if(!kind)throw new Error('Unknown submission type.');
+  const sh=sheet_(kind),values=sh.getDataRange().getValues();
+  for(let i=1;i<values.length;i++)if(String(values[i][0])===String(p.id)){
+    if(p.remove===true){sh.deleteRow(i+1);return {community:communitySubmissions_()};}
+    sh.getRange(i+1,6).setValue(!!p.approved);
+    return {community:communitySubmissions_()};
+  }
+  throw new Error('Submission not found.');
 }
 
 function findCommission_(id) {

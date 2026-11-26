@@ -966,7 +966,14 @@ async function post(body){
   const r = await fetch(API, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body)});
   try { j = await r.json(); } catch { throw new Error('The studio server did not answer. Please try again.'); }
  }
- if (!j || !j.ok) { const e = new Error((j && j.error) || 'Something went wrong. Please try again.'); e.signedOut = j && j.signedOut; throw e; }
+ if (!j || !j.ok) {
+  const serverError = String((j && j.error) || '');
+  const outdatedBackend = /unknown request|unknown action|unsupported action/i.test(serverError);
+  const message = outdatedBackend
+   ? 'The sign-in server is out of date. The website has the new login, but its Google Apps Script deployment still needs to be updated. In the linked Google Sheet, open Extensions → Apps Script, then Deploy → Manage deployments → Edit (pencil) → Version: New version → Deploy. Do not create a new deployment URL.'
+   : (serverError || 'Something went wrong. Please try again.');
+  const e = new Error(message); e.signedOut = j && j.signedOut; throw e;
+ }
  return j;
 }
 async function loadSite(){

@@ -565,6 +565,12 @@ textarea{line-height:1.65}
 
 
 /* Public, read-only completed commission showcase */
+.public-project-section{margin-top:24px}
+.public-project-section .ph{margin:0 0 10px}
+.public-project-gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.public-project-gallery a{display:block;aspect-ratio:4/3;border-radius:8px;overflow:hidden;background:#e8e3d7;border:1px solid var(--line)}
+.public-project-gallery img{width:100%;height:100%;object-fit:cover}
+.public-readonly-note{display:flex;align-items:center;gap:8px;margin-top:24px;padding:12px 14px;background:#eef3e9;border:1px solid #d6e2ce;border-radius:7px;color:#38523a;font-size:13px;font-weight:600}
 .public-mail-layout .mail-sidebar{background:#14251a}
 .public-mail-layout .mail-sidebar button[aria-current=true]{background:#25452f;color:#dfffce}
 .public-mrow{width:100%;text-align:left;border:0;border-bottom:1px solid #e3e6df;background:#fff;display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:10px;align-items:start;cursor:pointer;color:var(--ink)}
@@ -729,7 +735,7 @@ function viewHome(){
    <h1>${esc(s.heroLine1)}<span>${esc(s.heroLine2)}</span></h1>
    <p class="byline">by <b>${esc(s.heroBy)}</b></p>
    <p class="lead">${esc(s.lead)}</p>
-   <div class="actions"><a class="btn btn-leaf" href="#commission">${ic('pen')} Request a build ${ic('arrow')}</a><a class="btn btn-line" href="#vault">${ic('grid')} Explore the Vault</a></div>
+   <div class="actions"><a class="btn btn-leaf" href="#commission">${ic('pen')} Request a build ${ic('arrow')}</a><a class="btn btn-line" href="#vault">${ic('grid')} Explore the Vault</a><a class="btn btn-line" href="#commission-list">${ic('check-circle')} Completed commissions</a></div>
    <div class="facts"><span>Free estimates</span><span>Progress updates</span><span>Minecraft Bedrock</span></div>
   </div></div>
   ${hero ? `<a class="hero-cap" href="#build-${esc(hero.id)}">Pictured: ${esc(hero.title)}</a>` : ''}
@@ -1028,13 +1034,23 @@ function renderCommissionSurface(){
  else renderTab();
 }
 function publicCommissionPane(c){
- const facts = [['Build type',c.type],['Platform',c.platform],['Size',c.size],['Budget',c.budget],['Deadline',c.deadline && niceDate(c.deadline)],['Completed',c.received && niceDate(c.received)]].filter(x=>x[1]);
- const refs = String(c.refs || '').split(/\s+/).filter(Boolean);
- return `<div class="pane public-commission-detail"><div class="pane-top"><div><p class="label">Completed commission</p><h3>${esc(c.type || 'Minecraft build')}</h3><p class="sub">${esc(c.id)} · <span class="st" data-s="Done" style="margin:0">Done</span></p></div><span class="public-lock">${ic('eye')} Public showcase</span></div>
-  <div class="dgrid">${facts.map(([l,v])=>`<div><small>${l}</small><b>${esc(v)}</b></div>`).join('')}</div>
-  <p class="ph">Project details</p><div class="idea public-idea">${esc(c.idea || 'No project description was added.')}</div>
-  ${refs.length ? `<p class="ph">Reference links</p><div class="idea">${refs.map(x=>https(x)?`<a ${out(x)}>${esc(x)}</a>`:esc(x)).join('<br>')}</div>` : ''}
- </div>`;
+ const facts = [
+  ['Build type',c.type],['Platform',c.platform],['Dimensions',c.size],
+  ['Budget range',c.budget],['Requested deadline',c.deadline && niceDate(c.deadline)],
+  ['Received',c.received && niceDate(c.received)]
+ ].filter(x=>x[1]);
+ const refs = String(c.refs || '').split(/\\s+/).filter(Boolean);
+ const detail = c.completedDetails || c.workSummary || c.completionNotes || '';
+ const gallery = Array.isArray(c.gallery) ? c.gallery.filter(x => x && https(x.url)).slice(0,12) : [];
+ return `<article class="pane public-commission-detail">
+  <div class="pane-top"><div><p class="label">Completed commission</p><h3>${esc(c.title || c.type || 'Minecraft build')}</h3><p class="sub">${esc(c.id)} · <span class="st" data-s="Done" style="margin:0">Done</span></p></div><span class="public-lock">${ic('eye')} Public showcase</span></div>
+  <section class="public-project-section"><p class="ph">Project specifications</p><div class="dgrid">${facts.map(([l,v])=>`<div><small>${l}</small><b>${esc(v)}</b></div>`).join('')}</div></section>
+  <section class="public-project-section"><p class="ph">Original project brief</p><div class="idea public-idea">${esc(c.idea || 'No project description was added.')}</div></section>
+  ${detail ? `<section class="public-project-section"><p class="ph">Completed work and build notes</p><div class="idea public-idea">${esc(detail)}</div></section>` : ''}
+  ${gallery.length ? `<section class="public-project-section"><p class="ph">Project gallery</p><div class="public-project-gallery">${gallery.map(g=>`<a ${out(g.url)}><img src="${esc(imgOk(g.url))}" alt="${esc(g.alt || 'Completed commission image')}" loading="lazy"></a>`).join('')}</div></section>` : ''}
+  ${refs.length ? `<section class="public-project-section"><p class="ph">Reference material</p><div class="idea">${refs.map(x=>https(x)?`<a ${out(x)}>${esc(x)}</a>`:esc(x)).join('<br>')}</div></section>` : ''}
+  <p class="public-readonly-note">${ic('lock')} Public viewing only — customer contact details and private studio notes are not displayed.</p>
+ </article>`;
 }
 function viewCommissionList(){
  const q = M.mailQ.toLowerCase();

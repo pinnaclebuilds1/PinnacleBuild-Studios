@@ -117,6 +117,7 @@ h2 span{display:block;color:var(--moss)}.dark h2 span{color:var(--leaf)}
 .tile{position:relative;display:block;border-radius:10px;overflow:hidden;background:#20262a;text-decoration:none;color:#fff;min-height:270px;box-shadow:0 22px 36px -28px #2b2414}
 .tile:first-child{grid-row:span 2;min-height:560px}
 .tile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .6s ease,opacity 1s ease}
+.tile-body,.tile>.badge{transition:opacity 1s ease}
 .tile.rotating-out img,.tile.rotating-out .tile-body,.tile.rotating-out>.badge{opacity:0}
 .tile.rotating-in img,.tile.rotating-in .tile-body,.tile.rotating-in>.badge{animation:featuredFadeIn 1s ease both}
 @keyframes featuredFadeIn{from{opacity:0}to{opacity:1}}

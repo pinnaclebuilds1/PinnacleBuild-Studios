@@ -1290,6 +1290,7 @@ document.addEventListener('submit', async e => {
  const v = id => $('#' + id).value.trim();
  if (f.id === 'cform') return sendCommission(e);
  if (f.id === 'cupd') return act('u-msg', () => call('updateCommission', {id:M.sel, status:v('u-status'), quote:v('u-quote'), notes:$('#u-notes').value}), 'Saved.');
+ if (f.id === 'queueform') return act('q-msg', () => call('updateCommission', {id:M.sel, publicName:v('q-name'), queuePosition:v('q-position'), estimatedStart:v('q-start'), queueVisible:$('#q-visible').checked}), 'Public listing saved.');
  if (f.id === 'creply') { if (!v('r-msg')) return say('r-note', 'Write a message first.', true); const btn = $('#r-go'); btn.disabled = true; return act('r-note', () => call('reply', {id:M.sel, subject:v('r-sub'), message:$('#r-msg').value}), M.demo ? 'Preview: not really sent.' : 'Sent from your Gmail.'); }
  if (f.id === 'bform') {
   if (!v('e-title')) return say('e-msg', 'Give the build a title.', true);

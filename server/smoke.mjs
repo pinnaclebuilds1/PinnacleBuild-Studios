@@ -105,7 +105,7 @@ try {
     assert.match(body.error, /Unknown request/);
   });
 
-  let commissionId = '';
+  let commissionId = '', commissionNonce = 'smoke-' + Date.now();
 
   await check('guest commission validation', async () => {
     const bad = await api({ action: 'commission', data: { name: 'Sam' } });
@@ -129,12 +129,28 @@ try {
         platform: 'Windows / PC',
         size: '100 x 100',
         budget: '$40',
-        idea: 'A cozy wizard tower with a library inside.'
+        idea: 'A cozy wizard tower with a library inside.',
+        nonce: commissionNonce
       }
     });
     assert.equal(body.ok, true);
     assert.match(body.ref, /^PB-[0-9A-F]{8}$/);
     commissionId = body.ref;
+  });
+
+  await check('a resent commission with the same key is not duplicated', async () => {
+    const { body } = await api({
+      action: 'commission',
+      data: {
+        name: 'Sam',
+        email: 'sam@example.com',
+        discord: 'samcraft',
+        idea: 'A cozy wizard tower with a library inside.',
+        nonce: commissionNonce
+      }
+    });
+    assert.equal(body.ok, true);
+    assert.equal(body.ref, commissionId);
   });
 
   await check('public queue shows the new request without contact details', async () => {

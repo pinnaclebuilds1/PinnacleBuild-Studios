@@ -218,6 +218,17 @@ export class Api {
     if (!name || !email || !discord || !idea) throw new Error('Please complete all required fields.');
     if (!isEmail(email)) throw new Error('Please use a valid email address so the studio can reply.');
 
+    /* A visitor whose request timed out may send it again. The client keeps one
+       key per submission, so the retry returns the original request instead of
+       filing a duplicate row. */
+    const nonce = text(input.nonce, 64);
+    if (nonce) {
+      const repeat = this.db.commissions.find((c) =>
+        c.data && c.data.nonce === nonce && c.data.email === email &&
+        Date.now() - Date.parse(c.received) < 10 * 60 * 1000);
+      if (repeat) return { ref: repeat.id, confirmed: false, email };
+    }
+
     const record = {
       id: newId('PB'),
       received: now(),
@@ -234,6 +245,7 @@ export class Api {
         deadline: text(input.deadline, 40),
         idea,
         refs: text(input.refs, 1500),
+        nonce,
         publicName: profile ? profile.displayName : text(input.publicName, 60),
         avatarUrl: profile && /^https:\/\//i.test(profile.picture || '') ? profile.picture : OWNER_AVATAR,
         profileId: profile ? profile.id : '',

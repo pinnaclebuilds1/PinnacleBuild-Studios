@@ -931,7 +931,10 @@ function viewBuild(id){
 }
 
 /* ---------- commission page ---------- */
-let likeTitle = '', lastRequest = null;
+let likeTitle = '', lastRequest = null, pendingNonce = '';
+/* A resend after a timeout must not create a second request, so one key is
+   minted per submission and kept until the studio server confirms it. */
+const newNonce = () => { try { return crypto.randomUUID(); } catch { return Date.now().toString(36) + Math.random().toString(36).slice(2); } };
 function viewCommission(){
  const s = S(), open = s.open !== 'false', U = M.userProfile;
  const side = `<aside class="side">
@@ -975,10 +978,13 @@ async function sendCommission(e){
  if (missing) { say('Please fill in every field marked *.', true); $('#' + missing).focus(); return; }
  if (!CONNECTED) { say('This form isn’t connected yet. The site owner needs to finish setup.', true); return; }
  const data = {name:v('c-name'), publicName:(M.userProfile ? M.userProfile.displayName : ''), gmail:email, discord:v('c-discord'), type:v('c-type'), platform:v('c-platform'), size:v('c-size'), budget:v('c-budget'), deadline:v('c-deadline'), idea:v('c-idea'), refs:v('c-refs')};
- btn.disabled = true; say('Sending…');
- try {
-  const r = await post({action:'commission', userToken:M.userToken, data, hp:v('c-hp')});
-  lastRequest = {name:data.name, gmail:data.gmail, ref:r.ref, confirmed:r.confirmed}; likeTitle = '';
+   if (!pendingNonce) pendingNonce = newNonce();
+  data.nonce = pendingNonce;
+  btn.disabled = true; say('Sending…');
+  try {
+   const r = await post({action:'commission', userToken:M.userToken, data, hp:v('c-hp')});
+   pendingNonce = '';
+   lastRequest = {name:data.name, gmail:data.gmail, ref:r.ref, confirmed:r.confirmed}; likeTitle = '';
   render(); scrollTo(0, 0);
  } catch (err) { say(err.message || 'Could not send. Please try again.', true); btn.disabled = false; }
 }
@@ -987,7 +993,17 @@ async function sendCommission(e){
 /* Every request gets a deadline, so a stalled connection can never leave a
    button stuck on "Sending…" with nothing to show for it. */
 const fetchTimeout = ms => {
- try { return { signal: AbortSignal.timeout(ms) }; } catch { return {}; }
+ if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') return { signal: AbortSignal.timeout(ms) };
+ /* Older engines have no AbortSignal.timeout, so build the same deadline by hand
+    rather than quietly sending the request with none. */
+ try {
+  const control = new AbortController();
+  setTimeout(() => {
+   try { control.abort(new DOMException('signal timed out', 'TimeoutError')); }
+   catch { control.abort(); }
+  }, ms);
+  return { signal: control.signal };
+ } catch { return {}; }
 };
 async function post(body, timeoutMs = 20000){
  let r;
@@ -1010,23 +1026,26 @@ async function post(body, timeoutMs = 20000){
    itself, so a failed request never turns into a silent net::ERR_FAILED. */
 async function loadSite(attempt = 0){
  if (!CONNECTED) return false;
+ let j;
  try {
   const res = await fetch(API + (API.includes('?') ? '&' : '?') + 'action=site', {cache:'no-store', ...fetchTimeout(5000)});
   if (!res.ok) throw new Error('HTTP ' + res.status);
-  const j = await res.json();
+  j = await res.json();
   if (!j || !j.ok) throw new Error('Unreadable answer');
-  GOOGLE_CLIENT_ID = String(j.googleClientId || GOOGLE_CLIENT_ID).trim();
-  remote = {settings:j.settings || {}, featured:Array.isArray(j.featured) ? j.featured : [], builds:Array.isArray(j.builds) ? j.builds : [], community:j.community || {feedback:[],referrals:[]}};
-  showNetNote(false);
-  renderChrome();
-  if (!['commission','manager','commission-list'].includes(currentView)) render();
-  if (currentView === 'manager' && !M.token) renderGoogleSignIn();
-  return true;
  } catch {
   if (attempt < 1) { await new Promise(done => setTimeout(done, 1200)); return loadSite(attempt + 1); }
   showNetNote(true);
   return false;
  }
+ /* Rendering runs outside the network try, so a drawing mistake is never
+    reported to the visitor as a server that could not be reached. */
+ GOOGLE_CLIENT_ID = String(j.googleClientId || GOOGLE_CLIENT_ID).trim();
+ remote = {settings:j.settings || {}, featured:Array.isArray(j.featured) ? j.featured : [], builds:Array.isArray(j.builds) ? j.builds : [], community:j.community || {feedback:[],referrals:[]}};
+ showNetNote(false);
+ renderChrome();
+ if (!['commission','manager','commission-list'].includes(currentView)) render();
+ if (currentView === 'manager' && !M.token) renderGoogleSignIn();
+ return true;
 }
 function showNetNote(show){
  const existing = document.getElementById('net-note');
@@ -1035,7 +1054,7 @@ function showNetNote(show){
  const note = document.createElement('div');
  note.id = 'net-note'; note.className = 'net-note'; note.setAttribute('role', 'status');
  const text = document.createElement('span');
- text.textContent = 'Could not reach the studio server. The built-in portfolio is showing.';
+ text.textContent = 'Could not reach the studio server. Some content is missing; try again in a moment.';
  const retry = document.createElement('button');
  retry.type = 'button'; retry.textContent = 'Try again';
  retry.addEventListener('click', async () => {
@@ -1496,8 +1515,10 @@ document.addEventListener('change', async e => {
    if (kind === 'world' && !/\.(mcworld|zip)$/i.test(file.name)) throw new Error('Pick a .mcworld file.');
    say('f-msg', `Uploading ${files.length > 1 ? (n + 1) + ' of ' + files.length : file.name}…`);
    const enc = await fileToBase64(file, isImg);
-       /* A 20 MB picture becomes ~27 MB of base64, so uploads get minutes, not seconds. */
-    const r = await call('upload', {buildId:b.id, kind, name:isImg ? file.name.replace(/\.\w+$/, '') + '.jpg' : file.name, data:enc.data, size:enc.size, preview:M.demo ? enc.preview : undefined}, 180000);
+       /* A 20 MB picture becomes ~27 MB of base64, so the deadline follows the
+       file: three minutes at least, ten at most. */
+    const uploadMs = Math.min(600000, Math.max(180000, Math.round(enc.size / 1000) * 60));
+    const r = await call('upload', {buildId:b.id, kind, name:isImg ? file.name.replace(/\.\w+$/, '') + '.jpg' : file.name, data:enc.data, size:enc.size, preview:M.demo ? enc.preview : undefined}, uploadMs);
    if (r.site) applySite(r.site);
   }
   renderTab(); say('f-msg', 'Uploaded.');

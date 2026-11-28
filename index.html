@@ -24,10 +24,10 @@ window.PINNACLE_API = "https://pinnacle-builds-vdb5vf.freebuff.site/api";
 /* VOICE: a real solo Bedrock builder: confident, casual, first person.
    IDEA: a night forest with grass-block edges; chunky block buttons and pixel labels nod to the game without copying it.
    PICTURE: the owner's own Deadly Nadder render fills the hero; real screenshots carry every card and build page.
-   COLOUR and TYPE: forest night #0b1811, parchment #f2ead8, leaf #39ff14; Fraunces 800 headlines, Pixelify Sans labels, DM Sans body.
+   COLOUR and TYPE: forest night #0b1811, parchment #f2ead8, leaf #39ff14; Manrope carries every family and ships with the site.
    LAYOUT: sticky header; hero; featured mosaic; XP-bar process; socials; referrals; footer; #vault, #build-*, #commission, #manager views. */
 :root{--night:#0b1811;--panel:#13281c;--leaf:#39ff14;--leaf-dk:#269b3b;--moss:#2b6240;--moss-dk:#1d4a2f;--cream:#f2ead8;--cream2:#f9f4e7;--line:#ddd0b3;--ink:#17261c;--muted:#56645a;--red:#b4432c;
---serif:Fraunces,Georgia,serif;--pixel:"Pixelify Sans","Courier New",monospace;--sans:"DM Sans",system-ui,sans-serif;color-scheme:light}
+--serif:Manrope,Arial,sans-serif;--pixel:Manrope,Arial,sans-serif;--sans:Manrope,Arial,sans-serif;color-scheme:light}
 *{box-sizing:border-box;min-width:0}
 html{scroll-behavior:smooth;scroll-padding-top:96px}
 body{margin:0;background:var(--cream);color:var(--ink);font:17px/1.6 var(--sans);overflow-x:clip;-webkit-font-smoothing:antialiased}
@@ -984,10 +984,19 @@ async function sendCommission(e){
 }
 
 /* ---------- network ---------- */
-async function post(body){
+/* Every request gets a deadline, so a stalled connection can never leave a
+   button stuck on "Sending…" with nothing to show for it. */
+const fetchTimeout = ms => {
+ try { return { signal: AbortSignal.timeout(ms) }; } catch { return {}; }
+};
+async function post(body, timeoutMs = 20000){
  let r;
- try { r = await fetch(API, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body)}); }
- catch { throw new Error('Could not reach the studio server. Check your connection and try again.'); }
+ try { r = await fetch(API, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body), ...fetchTimeout(timeoutMs)}); }
+ catch (err) {
+  throw new Error(err && err.name === 'TimeoutError'
+   ? 'The studio server took too long to answer. Check your connection and try again.'
+   : 'Could not reach the studio server. Check your connection and try again.');
+ }
  let j;
  try { j = await r.json(); } catch { throw new Error('The studio server did not answer. Please try again.'); }
  if (!j || !j.ok) {
@@ -999,13 +1008,10 @@ async function post(body){
 /* One quick retry covers a dropped connection. If the studio server still can't
    be reached, the page keeps its built-in portfolio and says so in the page
    itself, so a failed request never turns into a silent net::ERR_FAILED. */
-const fetchTimeout = ms => {
- try { return { signal: AbortSignal.timeout(ms) }; } catch { return {}; }
-};
 async function loadSite(attempt = 0){
  if (!CONNECTED) return false;
  try {
-  const res = await fetch(API + (API.includes('?') ? '&' : '?') + 'action=site', {cache:'no-store', ...fetchTimeout(8000)});
+  const res = await fetch(API + (API.includes('?') ? '&' : '?') + 'action=site', {cache:'no-store', ...fetchTimeout(5000)});
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const j = await res.json();
   if (!j || !j.ok) throw new Error('Unreadable answer');
@@ -1029,7 +1035,7 @@ function showNetNote(show){
  const note = document.createElement('div');
  note.id = 'net-note'; note.className = 'net-note'; note.setAttribute('role', 'status');
  const text = document.createElement('span');
- text.textContent = 'Live studio data could not load, so the saved portfolio is showing.';
+ text.textContent = 'Could not reach the studio server. The built-in portfolio is showing.';
  const retry = document.createElement('button');
  retry.type = 'button'; retry.textContent = 'Try again';
  retry.addEventListener('click', async () => {
@@ -1052,9 +1058,9 @@ const SAMPLE = () => [
 ];
 let demoSite = null;
 
-async function call(op, payload = {}){
+async function call(op, payload = {}, timeoutMs){
  if (M.demo) return demoCall(op, payload);
- try { return await post({action:'admin', token:M.token, op, payload}); }
+ try { return await post({action:'admin', token:M.token, op, payload}, timeoutMs); }
  catch (e) { if (e.signedOut) signOut(e.message); throw e; }
 }
 function demoCall(op, p){
@@ -1490,7 +1496,8 @@ document.addEventListener('change', async e => {
    if (kind === 'world' && !/\.(mcworld|zip)$/i.test(file.name)) throw new Error('Pick a .mcworld file.');
    say('f-msg', `Uploading ${files.length > 1 ? (n + 1) + ' of ' + files.length : file.name}…`);
    const enc = await fileToBase64(file, isImg);
-   const r = await call('upload', {buildId:b.id, kind, name:isImg ? file.name.replace(/\.\w+$/, '') + '.jpg' : file.name, data:enc.data, size:enc.size, preview:M.demo ? enc.preview : undefined});
+       /* A 20 MB picture becomes ~27 MB of base64, so uploads get minutes, not seconds. */
+    const r = await call('upload', {buildId:b.id, kind, name:isImg ? file.name.replace(/\.\w+$/, '') + '.jpg' : file.name, data:enc.data, size:enc.size, preview:M.demo ? enc.preview : undefined}, 180000);
    if (r.site) applySite(r.site);
   }
   renderTab(); say('f-msg', 'Uploaded.');

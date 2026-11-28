@@ -1,0 +1,23 @@
+{
+  "name": "pinnaclebuild-studios",
+  "version": "2.1.0",
+  "private": true,
+  "description": "Pinnacle Builds website plus its studio backend (commissions, manager, uploads, community), runnable on Node or as a hosted Cloudflare Worker.",
+  "type": "module",
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "start": "node server/index.mjs",
+    "dev": "node server/index.mjs",
+    "test": "node server/smoke.mjs",
+    "build:site": "node deploy/build-site.mjs",
+    "build:worker": "node deploy/build-worker.mjs",
+    "build": "npm run build:site && npm run build:worker",
+    "dev:worker": "npm run build && wrangler dev --config wrangler.local.jsonc --port 8788"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "wrangler": "^4.42.0"
+  }
+}

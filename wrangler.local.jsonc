@@ -1,0 +1,12 @@
+// Local preview of the hosted build, with local D1 + R2.
+// Run: npm run build:site && npx wrangler dev --config wrangler.local.jsonc
+{
+  "name": "pinnacle-builds-local",
+  "main": "dist/worker.mjs",
+  "compatibility_date": "2026-11-28",
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "pinnacle-builds-local", "database_id": "00000000-0000-0000-0000-000000000000" }
+  ],
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "pinnacle-builds-local" }]
+}

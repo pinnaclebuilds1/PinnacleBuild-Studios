@@ -16,12 +16,11 @@
 window.PINNACLE_API = "https://pinnacle-builds-vdb5vf.freebuff.site/api";
 </script>
 <style>
-/* Fonts ship with the site, and icons are drawn by the page itself, so nothing
-   here depends on a third-party CDN that a network can block (net::ERR_FAILED). */
+/* The type face ships with the site and icons are drawn by the page itself, so
+   nothing here depends on a third-party CDN that a network can block
+   (net::ERR_FAILED). Only Manrope is loaded: the studio restyle uses it for
+   every family, so extra woff2 files would be downloaded and never used. */
 @font-face{font-family:Manrope;src:url("media/fonts/manrope.woff2") format("woff2");font-weight:400 800;font-style:normal;font-display:swap}
-@font-face{font-family:"DM Sans";src:url("media/fonts/dm-sans.woff2") format("woff2");font-weight:400 800;font-style:normal;font-display:swap}
-@font-face{font-family:Fraunces;src:url("media/fonts/fraunces.woff2") format("woff2");font-weight:700 900;font-style:normal;font-display:swap}
-@font-face{font-family:"Pixelify Sans";src:url("media/fonts/pixelify.woff2") format("woff2");font-weight:400 700;font-style:normal;font-display:swap}
 /* VOICE: a real solo Bedrock builder: confident, casual, first person.
    IDEA: a night forest with grass-block edges; chunky block buttons and pixel labels nod to the game without copying it.
    PICTURE: the owner's own Deadly Nadder render fills the hero; real screenshots carry every card and build page.
@@ -604,12 +603,13 @@ textarea{line-height:1.65}
    reached, the page keeps its built-in portfolio and says so here, so the only
    thing a visitor experiences is a visible retry instead of a silent
    net::ERR_FAILED buried in the console. */
-.net-note{position:fixed;left:50%;bottom:18px;z-index:90;display:flex;gap:10px;align-items:center;max-width:calc(100vw - 24px);padding:10px 12px 10px 16px;border:1px solid var(--moss);border-radius:12px;background:var(--night);color:var(--cream);font:500 14px/1.35 var(--sans);box-shadow:0 12px 30px rgb(0 0 0 / .3);transform:translateX(-50%)}
-.net-note span{min-width:0}
+.net-note{position:fixed;left:12px;right:12px;bottom:18px;z-index:90;display:flex;gap:10px;align-items:center;margin-inline:auto;max-width:520px;padding:10px 12px 10px 16px;border:1px solid var(--moss);border-radius:12px;background:var(--night);color:var(--cream);font:500 14px/1.35 var(--sans);box-shadow:0 12px 30px rgb(0 0 0 / .3)}
+.net-note span{flex:1;min-width:0}
 .net-note button{flex:none;padding:7px 12px;border:0;border-radius:8px;background:var(--leaf);color:var(--night);font:600 13px var(--sans);cursor:pointer}
+.net-note button[disabled]{opacity:.75;cursor:progress}
 .net-note button:focus-visible{outline:2px solid var(--cream);outline-offset:2px}
 @media (prefers-reduced-motion:no-preference){.net-note{animation:net-note-in .16s ease-out both}}
-@keyframes net-note-in{from{opacity:0;transform:translate(-50%,6px)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes net-note-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 </style>
 </head>
 <body>
@@ -702,7 +702,6 @@ const BUILD_TYPES = ['Creature or dragon','House or building','Castle or fortres
 const PLATFORMS = ['Not sure yet','Windows / PC','Xbox','PlayStation','Nintendo Switch','Mobile (iOS / Android)','Realm or server'];
 
 let remote = {settings:{}, featured:[], builds:[], community:{feedback:[],referrals:[]}};
-let faFailed = false;
 
 /* ---------- helpers ---------- */
 const $ = s => document.querySelector(s);
@@ -729,14 +728,14 @@ const imgOk = u => {
  return https(u) ? u : '';
 };
 const out = href => `href="${esc(href)}" target="_blank" rel="noopener"`;
-const fb = (name, l) => `<i class="fb fa-brands fa-${name}" data-l="${l}"></i>`;
+/* The letter chips are styled by .fb:empty::before, so they show immediately
+   without waiting for an icon font that no longer exists. */
+const fb = l => `<i class="fb" data-l="${l}" aria-hidden="true"></i>`;
 const paras = t => String(t || '').split(/\n\s*\n/).map(p => p.trim()).filter(Boolean).map(p => `<p>${esc(p).replace(/\n/g, '<br>')}</p>`).join('');
 const host = u => { try { return new URL(u).hostname; } catch { return ''; } };
 const kb = n => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
 const niceDate = d => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d || '')); const t = m ? new Date(+m[1], m[2] - 1, +m[3]) : new Date(d); return isNaN(t) ? String(d || '') : t.toLocaleDateString(undefined, {year:'numeric', month:'long', day:'numeric'}); };
 const shortDate = d => { const t = new Date(d); if (isNaN(t)) return ''; const today = new Date(); return t.toDateString() === today.toDateString() ? t.toLocaleTimeString(undefined, {hour:'numeric', minute:'2-digit'}) : t.toLocaleDateString(undefined, {month:'short', day:'numeric'}); };
-function fixIcons(){ if (faFailed) $$('i.fb').forEach(i => { if (!i.textContent) i.textContent = i.dataset.l; }); }
-setTimeout(() => { if (!window.FontAwesome) { faFailed = true; fixIcons(); } }, 5000);
 
 function S(){
  const s = {...DEFAULT_SETTINGS};
@@ -774,7 +773,7 @@ function statChips(b){
 /* ---------- chrome ---------- */
 function renderChrome(){
  const s = S(), open = s.open !== 'false';
- $('#hdr-right').innerHTML = `<a class="sicon" ${out(s.discord)} aria-label="Discord">${fb('discord','D')}</a><a class="sicon" ${out(s.youtube)} aria-label="YouTube">${fb('youtube','Y')}</a><a class="sicon" ${out(s.x)} aria-label="X">${fb('x-twitter','X')}</a>
+ $('#hdr-right').innerHTML = `<a class="sicon" ${out(s.discord)} aria-label="Discord">${fb('D')}</a><a class="sicon" ${out(s.youtube)} aria-label="YouTube">${fb('Y')}</a><a class="sicon" ${out(s.x)} aria-label="X">${fb('X')}</a>
   ${(M.userProfile || GOOGLE_CLIENT_ID) ? `<a class="btn btn-plain btn-sm" href="#account">${ic('user')} ${M.userProfile ? esc(M.userProfile.displayName || 'My account') : 'Sign in'}</a>` : ''}<a class="btn btn-leaf" href="#commission">${ic('pen')} ${open ? 'Request a build' : 'Commissions'}</a>`;
  $('#footer').innerHTML = `<div class="wrap foot">
   <div><a class="logo" href="#home"><span class="mark"><svg width="36" height="36" viewBox="4 4 56 56" fill="none" aria-hidden="true"><path d="M10 46 24 27l8 10 9-14 13 23M33 24l8-12 5 8" stroke="#39ff14" stroke-width="4" stroke-linecap="square" stroke-linejoin="round"/><path d="M16 51h32" stroke="#fffaf0" stroke-opacity=".5" stroke-width="2.4"/></svg></span><span class="wm"><b>Pinnacle<span>Builds</span></b><small>Bedrock build studio</small></span></a>
@@ -782,7 +781,6 @@ function renderChrome(){
   <div><h4>Explore</h4><a class="fl" href="#home">Home</a><a class="fl" href="#vault">The Vault</a><a class="fl" href="#how">How commissions work</a><a class="fl" href="#commission">Request a build</a></div>
   <div><h4>Follow</h4><a class="fl" ${out(s.discord)}>Discord</a><a class="fl" ${out(s.youtube)}>YouTube</a><a class="fl" ${out(s.x)}>X</a></div>
   <div class="fine"><span>© PinnacleBuild-Studios. Not an official Minecraft product. Not affiliated with Mojang or Microsoft. Deadly Nadder and Hideous Zippleback are characters from DreamWorks’ How to Train Your Dragon, shown here as fan builds.</span><a href="#manager">Studio manager</a></div></div>`;
- fixIcons();
 }
 
 /* ---------- home ---------- */
@@ -826,9 +824,9 @@ function viewHome(){
   <div class="wrap">
    <div class="sec-head"><div><p class="label">Follow along</p><h2>Find me online.</h2><p class="intro">New builds, previews, and videos from the studio.</p></div></div>
    <div class="socials">
-    <a class="social" ${out(s.discord)}><span class="bigicon">${fb('discord','D')}</span><span><b>Discord</b><small>Hang out and see new builds first</small></span>${ic('ext')}</a>
-    <a class="social" ${out(s.youtube)}><span class="bigicon">${fb('youtube','Y')}</span><span><b>YouTube</b><small>@PinnacleBuilds1</small></span>${ic('ext')}</a>
-    <a class="social" ${out(s.x)}><span class="bigicon">${fb('x-twitter','X')}</span><span><b>X</b><small>@PinnacleBuilds1</small></span>${ic('ext')}</a>
+    <a class="social" ${out(s.discord)}><span class="bigicon">${fb('D')}</span><span><b>Discord</b><small>Hang out and see new builds first</small></span>${ic('ext')}</a>
+    <a class="social" ${out(s.youtube)}><span class="bigicon">${fb('Y')}</span><span><b>YouTube</b><small>@PinnacleBuilds1</small></span>${ic('ext')}</a>
+    <a class="social" ${out(s.x)}><span class="bigicon">${fb('X')}</span><span><b>X</b><small>@PinnacleBuilds1</small></span>${ic('ext')}</a>
    </div>
    <div class="two" id="referrals" style="margin-top:clamp(56px,7vw,96px)">
     <div><p class="label">Client referrals</p><h2>From the people<span>I build for.</span></h2></div>
@@ -1001,10 +999,13 @@ async function post(body){
 /* One quick retry covers a dropped connection. If the studio server still can't
    be reached, the page keeps its built-in portfolio and says so in the page
    itself, so a failed request never turns into a silent net::ERR_FAILED. */
+const fetchTimeout = ms => {
+ try { return { signal: AbortSignal.timeout(ms) }; } catch { return {}; }
+};
 async function loadSite(attempt = 0){
  if (!CONNECTED) return false;
  try {
-  const res = await fetch(API + (API.includes('?') ? '&' : '?') + 'action=site', {cache:'no-store'});
+  const res = await fetch(API + (API.includes('?') ? '&' : '?') + 'action=site', {cache:'no-store', ...fetchTimeout(8000)});
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const j = await res.json();
   if (!j || !j.ok) throw new Error('Unreadable answer');
@@ -1016,7 +1017,7 @@ async function loadSite(attempt = 0){
   if (currentView === 'manager' && !M.token) renderGoogleSignIn();
   return true;
  } catch {
-  if (attempt < 1) { setTimeout(() => loadSite(attempt + 1), 1200); return false; }
+  if (attempt < 1) { await new Promise(done => setTimeout(done, 1200)); return loadSite(attempt + 1); }
   showNetNote(true);
   return false;
  }
@@ -1031,7 +1032,10 @@ function showNetNote(show){
  text.textContent = 'Live studio data could not load, so the saved portfolio is showing.';
  const retry = document.createElement('button');
  retry.type = 'button'; retry.textContent = 'Try again';
- retry.addEventListener('click', () => { note.remove(); loadSite(); });
+ retry.addEventListener('click', async () => {
+  retry.disabled = true; retry.textContent = 'Trying…';
+  if (!await loadSite() && retry.isConnected) { retry.disabled = false; retry.textContent = 'Try again'; }
+ });
  note.append(text, retry);
  document.body.appendChild(note);
 }
@@ -1299,7 +1303,6 @@ function viewCommissionList(){
 function renderCommissionList(){
  const el = $('#main'); if (!el) return;
  el.innerHTML = viewCommissionList();
- fixIcons();
  if (!M.publicLoaded && !M.publicLoading) loadPublicCommissions();
 }
 async function loadPublicCommissions(){
@@ -1581,7 +1584,6 @@ function render(){
  $('footer').hidden = view === 'manager' && !!(M.token || M.demo);
  const navKey = view !== 'home' ? (view === 'build' ? 'vault' : view) : (['how','socials'].includes(h) ? h : 'home');
  $$('.nav a').forEach(a => a.toggleAttribute('aria-current', a.dataset.nav === navKey));
- fixIcons();
 }
 function navigate(h, push = true){
  if (SECTIONS.includes(h)) {

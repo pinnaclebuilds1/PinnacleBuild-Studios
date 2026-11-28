@@ -7,11 +7,18 @@
  * then:
  *   node worker/smoke.mjs http://127.0.0.1:8788 localtest123
  *
- * The deploy check runs the same script against the public URL.
+ * It writes demo builds, feedback and a commission, so it only runs against a
+ * local copy: a public server is refused unless you add --yes-write.
  */
 import assert from 'node:assert/strict';
 
 const base = (process.argv[2] || 'http://127.0.0.1:8788').replace(/\/$/, '');
+const isLocal = /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i.test(base);
+if (!isLocal && !process.argv.includes('--yes-write')) {
+  console.error(`Refusing to write test data to ${base}.`);
+  console.error('Run it against a local wrangler dev copy, or pass --yes-write to change that deployment on purpose.');
+  process.exit(1);
+}
 const password = process.argv[3] || process.env.PB_TEST_PASSWORD || 'localtest123';
 const email = process.env.PB_TEST_EMAIL || 'pinnaclebuilds1@gmail.com';
 const PNG_1X1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==';
@@ -82,6 +89,16 @@ await check('the mirrored site origin may call the API', async () => {
   assert.equal((await res.json()).ok, true);
 });
 
+await check('a page opened from disk (opaque origin) may call the API', async () => {
+  const res = await fetch(`${base}/api`, {
+    method: 'POST',
+    headers: { 'content-type': 'text/plain', origin: 'null' },
+    body: JSON.stringify({ action: 'site' })
+  });
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('access-control-allow-origin'), 'null');
+});
+
 await check('non-read GET actions are refused', async () => {
   const res = await fetch(`${base}/api?action=commission`);
   const json = await res.json();
@@ -124,8 +141,10 @@ await check('guest commission is accepted and stored', async () => {
 await check('public queue hides contact details', async () => {
   const { body } = await api({ action: 'publicCommissions' });
   assert.equal(body.ok, true);
-  assert.ok(body.queue.some((row) => row.displayName === 'Worker Test'));
-  assert.equal(JSON.stringify(body).includes('worker@example.com'), false);
+  assert.ok(body.queue.some((row) => row.displayName === 'Private commission'));
+  const exposed = JSON.stringify(body);
+  assert.equal(exposed.includes('worker@example.com'), false);
+  assert.equal(exposed.includes('Worker Test'), false, 'a guest name must not be published');
 });
 
 await check('manager rejects a wrong password', async () => {
@@ -181,6 +200,27 @@ await check('uploads are stored in R2 and served', async () => {
   assert.equal(gone.status, 404);
 });
 
+await check('a showcase build can be edited by its own id', async () => {
+  const saved = await api({
+    action: 'admin',
+    token,
+    op: 'saveBuild',
+    payload: { build: { id: 'deadly-nadder', title: 'Deadly Nadder, revisited' } }
+  });
+  assert.equal(saved.body.ok, true, saved.body.error);
+  assert.equal(saved.body.id, 'deadly-nadder');
+  assert.equal(saved.body.site.builds.filter((b) => b.id === 'deadly-nadder').length, 1);
+});
+
+await check('a backup export carries no passwords or sessions', async () => {
+  const { body } = await api({ action: 'admin', token, op: 'backup' });
+  assert.equal(body.ok, true);
+  const text = JSON.stringify(body.backup);
+  assert.equal(text.includes('pbkdf2$'), false, 'password hash must not be exported');
+  assert.equal(text.includes(token), false, 'live sessions must not be exported');
+  assert.deepEqual(body.backup.sessions, []);
+});
+
 await check('private paths are not published', async () => {
   for (const path of ['/server/api.mjs', '/worker/index.mjs', '/sites.manifest.json', '/.env']) {
     const res = await fetch(`${base}${path}`);
@@ -215,6 +255,15 @@ await check('cleanup: commission archived, session signed out', async () => {
   assert.equal(out.body.ok, true);
   const after = await api({ action: 'admin', token, op: 'load' });
   assert.equal(after.body.signedOut, true);
+});
+
+await check('repeated wrong passwords are rate limited, not just refused', async () => {
+  let limited = false;
+  for (let attempt = 0; attempt < 12 && !limited; attempt += 1) {
+    const attemptResult = await api({ action: 'ownerLogin', email, password: `${password}-wrong` });
+    limited = attemptResult.status === 429 || /Too many/.test(String(attemptResult.body.error));
+  }
+  assert.ok(limited, 'password guesses should stop counting after a few tries');
 });
 
 console.log(`\n${passed} checks passed against ${base}`);

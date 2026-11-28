@@ -89,6 +89,16 @@ try {
     assert.equal(blocked.status, 403);
   });
 
+  await check('a page opened from disk (opaque origin) may reach the API', async () => {
+    const res = await fetch(`${base}/api`, {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain;charset=utf-8', origin: 'null' },
+      body: JSON.stringify({ action: 'site' })
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('access-control-allow-origin'), 'null');
+  });
+
   await check('rejects unknown actions', async () => {
     const { body } = await api({ action: 'nope' });
     assert.equal(body.ok, false);
@@ -131,9 +141,11 @@ try {
     const { body } = await api({ action: 'publicCommissions' });
     assert.equal(body.ok, true);
     assert.equal(body.commissions.length, 0);
-    const queued = body.queue.find((q) => q.displayName === 'Sam');
+    const queued = body.queue.find((q) => q.displayName === 'Private commission');
     assert.ok(queued, 'request should be in the public queue');
-    assert.equal(JSON.stringify(body).includes('sam@example.com'), false);
+    const exposed = JSON.stringify(body);
+    assert.equal(exposed.includes('sam@example.com'), false);
+    assert.equal(exposed.includes('Sam'), false, 'a guest name must not be published');
   });
 
   await check('manager routes require a session', async () => {
@@ -209,6 +221,11 @@ try {
     assert.equal(item.gmail, undefined);
     assert.equal(item.notes, undefined);
     assert.equal(item.thread, undefined);
+    assert.equal(item.idea, undefined, 'the private brief must not be published');
+    assert.equal(item.refs, undefined);
+    assert.equal(item.budget, undefined);
+    assert.equal(item.deadline, undefined);
+    assert.equal(item.publicName, '', 'a guest name must not be published');
     assert.equal(body.queue.length, 0);
   });
 
@@ -329,6 +346,39 @@ try {
     assert.equal(deleted.body.site.builds.some((b) => b.id === buildId), false);
     const gone = await fetch(`${base}${cover.url}`);
     assert.equal(gone.status, 404);
+  });
+
+  await check('a showcase build can be edited by its own id', async () => {
+    const saved = await api({
+      action: 'admin',
+      token,
+      op: 'saveBuild',
+      payload: { build: { id: 'deadly-nadder', title: 'Deadly Nadder, revisited', tagline: 'Same dragon, new perch.' } }
+    });
+    assert.equal(saved.body.ok, true);
+    assert.equal(saved.body.id, 'deadly-nadder', 'the server must keep the id the manager sent');
+    const rows = saved.body.site.builds.filter((b) => b.id === 'deadly-nadder');
+    assert.equal(rows.length, 1, 'editing must not add a duplicate row');
+    assert.equal(rows[0].tagline, 'Same dragon, new perch.');
+
+    const hidden = await api({
+      action: 'admin',
+      token,
+      op: 'saveBuild',
+      payload: { build: { id: 'deadly-nadder', title: 'Deadly Nadder, revisited', hidden: true } }
+    });
+    assert.equal(hidden.body.ok, true);
+    assert.equal(hidden.body.site.builds.some((b) => b.id === 'deadly-nadder'), false, 'hiding removes it from the public site');
+  });
+
+  await check('a backup export carries no passwords or sessions', async () => {
+    const { body } = await api({ action: 'admin', token, op: 'backup' });
+    assert.equal(body.ok, true);
+    const text = JSON.stringify(body.backup);
+    assert.equal(text.includes('pbkdf2$'), false, 'password hash must not be exported');
+    assert.equal(text.includes(token), false, 'live sessions must not be exported');
+    assert.deepEqual(body.backup.sessions, []);
+    assert.ok(body.backup.builds.length >= 1);
   });
 
   await check('homepage settings and featured builds are saved', async () => {

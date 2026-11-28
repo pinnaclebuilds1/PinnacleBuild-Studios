@@ -12,6 +12,9 @@ import { checkOrigin, corsHeaders } from '../server/cors.mjs';
 import { seedDatabase } from '../server/seed.mjs';
 
 const MAX_BODY = 42 * 1024 * 1024;
+/* Flood and password-guessing counters outlive one request: a fresh Api per
+   request would otherwise start with empty buckets and limit nothing. */
+const sharedLimits = { rateBuckets: new Map(), loginFailures: new Map() };
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
 const READ_ONLY_ACTIONS = ['site', 'publicCommissions', 'health'];
 
@@ -155,6 +158,8 @@ async function handleApi(request, env, config) {
     const { data, rev } = await load(env);
     const store = new EdgeStore({ db: data, rev, bucket: env.FILES });
     const api = new Api(store, config);
+    api.rateBuckets = sharedLimits.rateBuckets;
+    api.loginFailures = sharedLimits.loginFailures;
 
     try {
       await prepare(store, config);

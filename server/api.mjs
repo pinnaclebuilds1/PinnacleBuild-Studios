@@ -121,7 +121,8 @@ export class Api {
       ...(c.data || {})
     };
     for (const key of COMMISSION_FIELDS) if (c[key] !== undefined) out[key] = c[key];
-    out.publicName = c.publicName || (c.data ? c.data.publicName : '') || (c.data ? c.data.name : '');
+    /* Never fall back to the private name: publicName is what may be published. */
+    out.publicName = c.publicName || (c.data ? c.data.publicName : '') || '';
     out.completedGallery = Array.isArray(c.completedGallery) ? c.completedGallery : [];
     out.data = c.data || {};
     return out;
@@ -163,16 +164,15 @@ export class Api {
         id: String(c.id || ''),
         received: c.received || '',
         status: 'Done',
-        publicName: String(c.publicName || 'Minecraft builder'),
+        /* A finished commission is public as a showcase: the studio's own write-up,
+           pictures and the client's public handle — never the private brief,
+           budget, deadline or contact details. */
+        publicName: String(c.publicName || ''),
         avatarUrl: /^https:\/\//i.test(String(c.avatarUrl || '')) ? String(c.avatarUrl) : '',
         title: String(c.completedTitle || c.type || 'Minecraft build'),
         type: String(c.type || ''),
         platform: String(c.platform || ''),
         size: String(c.completedSize || c.size || ''),
-        budget: String(c.budget || ''),
-        deadline: String(c.deadline || ''),
-        idea: String(c.idea || ''),
-        refs: String(c.refs || ''),
         completedPrice: String(c.completedPrice || ''),
         completedBlocks: String(c.completedBlocks || ''),
         completedTime: String(c.completedTime || ''),
@@ -190,7 +190,7 @@ export class Api {
           String(a.received).localeCompare(String(b.received))
       )
       .map((c, index) => ({
-        displayName: String(c.publicName || c.name || 'Commission'),
+        displayName: String(c.publicName || 'Private commission'),
         avatarUrl: /^https:\/\//i.test(String(c.avatarUrl || '')) ? String(c.avatarUrl) : '',
         position: Number(c.queuePosition) || index + 1,
         estimatedStart: String(c.estimatedStart || ''),
@@ -234,12 +234,12 @@ export class Api {
         deadline: text(input.deadline, 40),
         idea,
         refs: text(input.refs, 1500),
-        publicName: profile ? profile.displayName : text(input.publicName, 60) || name,
+        publicName: profile ? profile.displayName : text(input.publicName, 60),
         avatarUrl: profile && /^https:\/\//i.test(profile.picture || '') ? profile.picture : OWNER_AVATAR,
         profileId: profile ? profile.id : '',
         profileEmail: profile ? profile.email : ''
       },
-      publicName: profile ? profile.displayName : text(input.publicName, 60) || name,
+      publicName: profile ? profile.displayName : text(input.publicName, 60),
       avatarUrl: profile && /^https:\/\//i.test(profile.picture || '') ? profile.picture : OWNER_AVATAR,
       queueVisible: true,
       queuePosition: 0,
@@ -514,7 +514,17 @@ export class Api {
     }
 
     if (op === 'backup') {
-      return { backup: this.db, exportedAt: now() };
+      /* A backup is a data export, not a spare key: drop the credential index and
+         live sessions so a downloaded file cannot be used to sign in. */
+      const { admin, sessions, ...rest } = this.db;
+      return {
+        backup: {
+          ...rest,
+          admin: { email: (admin && admin.email) || '', googleEmail: (admin && admin.googleEmail) || '' },
+          sessions: []
+        },
+        exportedAt: now()
+      };
     }
 
     throw new Error('Unknown manager action.');
@@ -564,9 +574,13 @@ export class Api {
   }
 
   async saveBuild(input) {
-    const existing = input.id ? this.findBuild(input.id) : null;
+    const wanted = text(input.id, 80).toLowerCase();
+    const existing = wanted ? this.findBuild(wanted) : null;
+    /* Keep a client-supplied id when it is a plain slug and still free. The three
+       showcase builds live in the page, so the manager edits them by id: without
+       this the server minted a new row and the edit silently did nothing. */
     const build = existing || {
-      id: newId('build').toLowerCase(),
+      id: wanted && /^[a-z0-9][a-z0-9-]{0,63}$/.test(wanted) ? wanted : newId('build').toLowerCase(),
       created: Date.now(),
       gallery: [],
       cover: null,

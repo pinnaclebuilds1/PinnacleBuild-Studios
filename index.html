@@ -15,15 +15,13 @@
    ===================================================================== */
 window.PINNACLE_API = "https://pinnacle-builds-vdb5vf.freebuff.site/api";
 </script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&family=Fraunces:opsz,wght@9..144,700;9..144,800&family=Pixelify+Sans:wght@500;600;700&display=swap">
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/brands.min.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/fontawesome.min.js"></script>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
+/* Fonts ship with the site, and icons are drawn by the page itself, so nothing
+   here depends on a third-party CDN that a network can block (net::ERR_FAILED). */
+@font-face{font-family:Manrope;src:url("media/fonts/manrope.woff2") format("woff2");font-weight:400 800;font-style:normal;font-display:swap}
+@font-face{font-family:"DM Sans";src:url("media/fonts/dm-sans.woff2") format("woff2");font-weight:400 800;font-style:normal;font-display:swap}
+@font-face{font-family:Fraunces;src:url("media/fonts/fraunces.woff2") format("woff2");font-weight:700 900;font-style:normal;font-display:swap}
+@font-face{font-family:"Pixelify Sans";src:url("media/fonts/pixelify.woff2") format("woff2");font-weight:400 700;font-style:normal;font-display:swap}
 /* VOICE: a real solo Bedrock builder: confident, casual, first person.
    IDEA: a night forest with grass-block edges; chunky block buttons and pixel labels nod to the game without copying it.
    PICTURE: the owner's own Deadly Nadder render fills the hero; real screenshots carry every card and build page.
@@ -602,6 +600,16 @@ textarea{line-height:1.65}
 .public-status{padding:10px 14px;color:#68746a;font-size:11px;border-top:1px solid #e3e6df}
 @media(max-width:850px){.public-mail-layout .mail-sidebar{display:flex}.public-mail-layout .mail-sidebar .mail-brand{width:100%}}
 
+/* The studio data lives on the site's own API host. If that host can't be
+   reached, the page keeps its built-in portfolio and says so here, so the only
+   thing a visitor experiences is a visible retry instead of a silent
+   net::ERR_FAILED buried in the console. */
+.net-note{position:fixed;left:50%;bottom:18px;z-index:90;display:flex;gap:10px;align-items:center;max-width:calc(100vw - 24px);padding:10px 12px 10px 16px;border:1px solid var(--moss);border-radius:12px;background:var(--night);color:var(--cream);font:500 14px/1.35 var(--sans);box-shadow:0 12px 30px rgb(0 0 0 / .3);transform:translateX(-50%)}
+.net-note span{min-width:0}
+.net-note button{flex:none;padding:7px 12px;border:0;border-radius:8px;background:var(--leaf);color:var(--night);font:600 13px var(--sans);cursor:pointer}
+.net-note button:focus-visible{outline:2px solid var(--cream);outline-offset:2px}
+@media (prefers-reduced-motion:no-preference){.net-note{animation:net-note-in .16s ease-out both}}
+@keyframes net-note-in{from{opacity:0;transform:translate(-50%,6px)}to{opacity:1;transform:translate(-50%,0)}}
 </style>
 </head>
 <body>
@@ -649,9 +657,18 @@ textarea{line-height:1.65}
 
 <script>
 {
-const API = String(window.PINNACLE_API || '').trim();
-const GAS = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null; /* true when Apps Script serves this page */
-const CONNECTED = !!GAS || !!API; /* an API URL is all the site needs, including this server's own /api */
+/* The published studio server. A page opened from disk (file://) or from a host
+   that was never given a server of its own uses this, because a relative /api
+   would fail with net::ERR_FAILED instead of reaching the backend. */
+const SITE_API = 'https://pinnacle-builds-vdb5vf.freebuff.site/api';
+const API = (() => {
+ const raw = String(window.PINNACLE_API || '').trim();
+ if (!raw) return SITE_API;
+ if (/^https?:\/\//i.test(raw)) return raw;
+ if (/^https?:$/.test(location.protocol)) return raw;
+ return SITE_API;
+})();
+const CONNECTED = !!API; /* the studio server's URL is all this page needs */
 /* When this page is served from another host (GitHub Pages, a mirror) the API is
    an absolute URL, so files it stored still have to load from the API's host. */
 const API_ORIGIN = (() => { try { return API ? new URL(API, location.href).origin : ''; } catch { return ''; } })();
@@ -959,7 +976,7 @@ async function sendCommission(e){
  const missing = ['c-name','c-discord','c-idea'].find(id => !v(id));
  if (missing) { say('Please fill in every field marked *.', true); $('#' + missing).focus(); return; }
  if (!CONNECTED) { say('This form isn’t connected yet. The site owner needs to finish setup.', true); return; }
- const data = {name:v('c-name'), publicName:(M.userProfile ? M.userProfile.displayName : v('c-name')), gmail:email, discord:v('c-discord'), type:v('c-type'), platform:v('c-platform'), size:v('c-size'), budget:v('c-budget'), deadline:v('c-deadline'), idea:v('c-idea'), refs:v('c-refs')};
+ const data = {name:v('c-name'), publicName:(M.userProfile ? M.userProfile.displayName : ''), gmail:email, discord:v('c-discord'), type:v('c-type'), platform:v('c-platform'), size:v('c-size'), budget:v('c-budget'), deadline:v('c-deadline'), idea:v('c-idea'), refs:v('c-refs')};
  btn.disabled = true; say('Sending…');
  try {
   const r = await post({action:'commission', userToken:M.userToken, data, hp:v('c-hp')});
@@ -970,40 +987,57 @@ async function sendCommission(e){
 
 /* ---------- network ---------- */
 async function post(body){
+ let r;
+ try { r = await fetch(API, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body)}); }
+ catch { throw new Error('Could not reach the studio server. Check your connection and try again.'); }
  let j;
- if (GAS) {
-  const raw = await new Promise((ok, no) => GAS.withSuccessHandler(ok).withFailureHandler(no).api(JSON.stringify(body))).catch(() => null);
-  try { j = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { j = null; }
-  if (!j) throw new Error('The studio server did not answer. Please try again.');
- } else {
-  let r;
-  try { r = await fetch(API, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body)}); }
-  catch { throw new Error('Could not reach the studio server. Check your connection and try again.'); }
-  try { j = await r.json(); } catch { throw new Error('The studio server did not answer. Please try again.'); }
- }
+ try { j = await r.json(); } catch { throw new Error('The studio server did not answer. Please try again.'); }
  if (!j || !j.ok) {
-  const serverError = String((j && j.error) || '');
-  const outdatedBackend = /unknown request|unknown action|unsupported action/i.test(serverError);
-  const appsScriptBackend = /^https:\/\/script\.google(usercontent)?\.com\//i.test(API);
-  const message = outdatedBackend
-   ? (appsScriptBackend
-     ? 'The Apps Script backend is out of date. In the linked Google Sheet open Extensions → Apps Script, then Deploy → Manage deployments → Edit (pencil) → Version: New version → Deploy. Or run this site with its own server: npm start.'
-     : 'That feature is not available on this server yet. Please try again later.')
-   : (serverError || 'Something went wrong. Please try again.');
-  const e = new Error(message); e.signedOut = j && j.signedOut; throw e;
+  const e = new Error(String((j && j.error) || 'Something went wrong. Please try again.'));
+  e.signedOut = j && j.signedOut; throw e;
  }
  return j;
 }
-async function loadSite(){
- if (!CONNECTED) return;
+/* One quick retry covers a dropped connection. If the studio server still can't
+   be reached, the page keeps its built-in portfolio and says so in the page
+   itself, so a failed request never turns into a silent net::ERR_FAILED. */
+async function loadSite(attempt = 0){
+ if (!CONNECTED) return false;
  try {
-  const j = GAS ? await post({action:'site'}) : await (await fetch(API + (API.includes('?') ? '&' : '?') + 'action=site')).json();
-  if (j && j.ok) { GOOGLE_CLIENT_ID = String(j.googleClientId || GOOGLE_CLIENT_ID).trim(); remote = {settings:j.settings || {}, featured:Array.isArray(j.featured) ? j.featured : [], builds:Array.isArray(j.builds) ? j.builds : [], community:j.community || {feedback:[],referrals:[]}}; renderChrome(); if (!['commission','manager','commission-list'].includes(currentView)) render(); if (currentView === 'manager' && !M.token) renderGoogleSignIn(); }
- } catch { /* keep the built-in builds */ }
+  const res = await fetch(API + (API.includes('?') ? '&' : '?') + 'action=site', {cache:'no-store'});
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const j = await res.json();
+  if (!j || !j.ok) throw new Error('Unreadable answer');
+  GOOGLE_CLIENT_ID = String(j.googleClientId || GOOGLE_CLIENT_ID).trim();
+  remote = {settings:j.settings || {}, featured:Array.isArray(j.featured) ? j.featured : [], builds:Array.isArray(j.builds) ? j.builds : [], community:j.community || {feedback:[],referrals:[]}};
+  showNetNote(false);
+  renderChrome();
+  if (!['commission','manager','commission-list'].includes(currentView)) render();
+  if (currentView === 'manager' && !M.token) renderGoogleSignIn();
+  return true;
+ } catch {
+  if (attempt < 1) { setTimeout(() => loadSite(attempt + 1), 1200); return false; }
+  showNetNote(true);
+  return false;
+ }
+}
+function showNetNote(show){
+ const existing = document.getElementById('net-note');
+ if (!show) { if (existing) existing.remove(); return; }
+ if (existing) return;
+ const note = document.createElement('div');
+ note.id = 'net-note'; note.className = 'net-note'; note.setAttribute('role', 'status');
+ const text = document.createElement('span');
+ text.textContent = 'Live studio data could not load, so the saved portfolio is showing.';
+ const retry = document.createElement('button');
+ retry.type = 'button'; retry.textContent = 'Try again';
+ retry.addEventListener('click', () => { note.remove(); loadSite(); });
+ note.append(text, retry);
+ document.body.appendChild(note);
 }
 
 /* =========================================================
-   STUDIO MANAGER (password protected; changes save to your Google Sheet)
+   STUDIO MANAGER (password protected; changes save to the studio database)
    ========================================================= */
 const M = {token:null, userToken:null, userProfile:null, memberData:null, members:[], demo:false, tab:'inbox', comms:[], sel:null, filter:'active', q:'', mailFolder:'inbox', mailQ:'', publicComms:[], publicQueue:[], publicSel:null, publicLoaded:false, publicLoading:false, publicError:'', edit:null, ownerEmail:'', profile:null, community:{feedback:[],referrals:[]}};
 try { M.token = sessionStorage.getItem('pb_token'); M.profile = JSON.parse(sessionStorage.getItem('pb_profile') || 'null'); M.userToken=sessionStorage.getItem('pb_user_token'); M.userProfile=JSON.parse(sessionStorage.getItem('pb_user_profile') || 'null'); } catch {}
@@ -1039,11 +1073,26 @@ function demoCall(op, p){
 function applySite(site){ if (site) { remote = {settings:site.settings || {}, featured:site.featured || [], builds:site.builds || [], community:site.community || remote.community || {feedback:[],referrals:[]}}; M.ownerEmail = (site.settings && (site.settings.notify || site.settings.ownerEmail)) || M.ownerEmail; renderChrome(); } }
 function signOut(note){ M.token = null; M.demo = false; M.profile = null; try { sessionStorage.removeItem('pb_token'); sessionStorage.removeItem('pb_profile'); } catch {} render(); if (note) { const m = $('#l-msg'); if (m) { m.textContent = note; m.classList.add('err'); } } }
 
+/* Google's sign-in script is loaded only when the studio actually has a client
+   id, so an unconfigured or blocked network never fetches it on page load. */
+let gsiLoading = false;
+function loadGoogleIdentity(){
+ if (window.google && google.accounts && google.accounts.id) return;
+ if (gsiLoading) return;
+ gsiLoading = true;
+ const s = document.createElement('script');
+ s.src = 'https://accounts.google.com/gsi/client';
+ s.async = true; s.defer = true;
+ s.onerror = () => { gsiLoading = false; };
+ document.head.appendChild(s);
+}
+
 function renderGoogleSignIn(attempt) {
  attempt = attempt || 0;
  const host = $('#google-signin-button');
  if (!host || M.token || M.demo) return;
  if (!GOOGLE_CLIENT_ID) { say('l-msg', 'Google sign-in is not set up on this site. Use your studio email and password above.', true); return; }
+ loadGoogleIdentity();
  if (!window.google || !google.accounts || !google.accounts.id) {
   if (attempt < 24) { setTimeout(() => renderGoogleSignIn(attempt + 1), 250); return; }
   say('l-msg', 'Google sign-in could not load. Refresh the page and try again.', true); return;
@@ -1070,6 +1119,7 @@ function renderMemberGoogleSignIn(attempt) {
  attempt=attempt||0; const host=$('#member-google-signin-button');
  if(!host||M.userProfile)return;
  if(!GOOGLE_CLIENT_ID){say('member-login-msg','Google sign-in is not configured yet. Ask the site owner to finish setup.',true);return;}
+ loadGoogleIdentity();
  if(!window.google||!google.accounts||!google.accounts.id){if(attempt<24){setTimeout(()=>renderMemberGoogleSignIn(attempt+1),250);return;}say('member-login-msg','Google sign-in could not load. Refresh and try again.',true);return;}
  host.innerHTML='';
  google.accounts.id.initialize({client_id:GOOGLE_CLIENT_ID,callback:handleMemberGoogleCredential});
@@ -1222,7 +1272,6 @@ function publicCommissionPane(c){
  return `<article class="pane public-commission-detail">
   <div class="pane-top"><div><p class="label">Completed commission</p><h3>${esc(c.title || c.type || 'Minecraft build')}</h3><p class="sub">${c.avatarUrl && https(c.avatarUrl) ? `<img src="${esc(imgOk(c.avatarUrl))}" alt="" style="width:30px;height:30px;border-radius:50%;object-fit:cover;vertical-align:middle">` : ''} ${esc(c.publicName || 'PinnacleBuilds client')} · ${esc(c.id)} · <span class="st" data-s="Done" style="margin:0">Done</span></p></div><span class="public-lock">${ic('eye')} Public showcase</span></div>
   <section class="public-project-section"><p class="ph">Project specifications</p><div class="dgrid">${facts.map(([l,v])=>`<div><small>${l}</small><b>${esc(v)}</b></div>`).join('')}</div></section>
-  <section class="public-project-section"><p class="ph">Original project brief</p><div class="idea public-idea">${esc(c.idea || 'No project description was added.')}</div></section>
   ${detail ? `<section class="public-project-section"><p class="ph">Completed work and build notes</p><div class="idea public-idea">${esc(detail)}</div></section>` : ''}
   ${gallery.length ? `<section class="public-project-section"><p class="ph">Project gallery</p><div class="public-project-gallery">${gallery.map(g=>`<a ${out(g.url)}><img src="${esc(imgOk(g.url))}" alt="${esc(g.alt || 'Completed commission image')}" loading="lazy"></a>`).join('')}</div></section>` : ''}
   ${refs.length ? `<section class="public-project-section"><p class="ph">Reference material</p><div class="idea">${refs.map(x=>https(x)?`<a ${out(x)}>${esc(x)}</a>`:esc(x)).join('<br>')}</div></section>` : ''}
@@ -1231,7 +1280,7 @@ function publicCommissionPane(c){
 }
 function viewCommissionList(){
  const q = M.mailQ.toLowerCase();
- const visible = M.publicComms.filter(c => !q || [c.id,c.type,c.platform,c.size,c.budget,c.deadline,c.idea].join(' ').toLowerCase().includes(q));
+ const visible = M.publicComms.filter(c => !q || [c.id,c.type,c.platform,c.size,c.completedDetails].join(' ').toLowerCase().includes(q));
  const c = M.publicComms.find(x => x.id === M.publicSel);
  const statusText = M.publicLoading ? 'Loading completed commissions…' : M.publicError ? M.publicError : 'Only completed projects are shown here. This page is public and read-only.';
  return `<section class="mail-top"><div class="wrap"><p class="label">Pinnacle Builds portfolio</p><h1>Commission List<span>.</span></h1><p class="intro">Explore completed commissions and open any project to see its details.</p></div></section>
@@ -1239,7 +1288,7 @@ function viewCommissionList(){
   <aside class="mail-sidebar"><p class="mail-brand">PUBLIC SHOWCASE</p><button type="button" aria-current="true">${ic('check-circle')} <span>Done Commissions</span><b>${M.publicComms.length}</b></button><div class="mail-note">Anyone can view this page. Editing and manager tools are not available here.</div></aside>
   <div class="mail-list box"><div class="mail-list-head"><h2>Done Commissions</h2><button type="button" class="btn btn-plain btn-sm" id="public-refresh">${ic('refresh-cw')} Refresh</button></div>
    <label class="msearch">${ic('search')}<input id="mail-q" type="search" placeholder="Search completed projects" value="${esc(M.mailQ)}"></label>
-   <div class="mail-rows">${visible.length ? visible.map(x=>`<button type="button" class="mrow public-mrow${x.id===M.publicSel?' selected':''}" data-public-sel="${esc(x.id)}" aria-current="${x.id===M.publicSel}"><span class="dot"></span><span>${x.avatarUrl && https(x.avatarUrl) ? `<img src="${esc(imgOk(x.avatarUrl))}" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:7px">` : ''}<span class="nm">${esc(x.publicName || x.title || x.type || 'Minecraft build')}</span><span class="snip">${esc(x.idea || 'Completed commission')} </span><span class="st" data-s="Done">Done</span></span><span class="when">${esc(shortDate(x.received))}<br>${esc(x.id)}</span></button>`).join('') : `<div class="mail-empty"><b>${M.publicLoading?'Loading…':M.publicError?'Could not load commissions':'No completed commissions yet'}</b><p>${M.publicError?esc(M.publicError):M.publicLoading?'Getting the public project list.': 'Completed projects will appear here once they are marked done in the private manager.'}</p></div>`}</div>
+   <div class="mail-rows">${visible.length ? visible.map(x=>`<button type="button" class="mrow public-mrow${x.id===M.publicSel?' selected':''}" data-public-sel="${esc(x.id)}" aria-current="${x.id===M.publicSel}"><span class="dot"></span><span>${x.avatarUrl && https(x.avatarUrl) ? `<img src="${esc(imgOk(x.avatarUrl))}" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:7px">` : ''}<span class="nm">${esc(x.publicName || x.title || x.type || 'Minecraft build')}</span><span class="snip">${esc(x.completedDetails || x.type || 'Completed commission')} </span><span class="st" data-s="Done">Done</span></span><span class="when">${esc(shortDate(x.received))}<br>${esc(x.id)}</span></button>`).join('') : `<div class="mail-empty"><b>${M.publicLoading?'Loading…':M.publicError?'Could not load commissions':'No completed commissions yet'}</b><p>${M.publicError?esc(M.publicError):M.publicLoading?'Getting the public project list.': 'Completed projects will appear here once they are marked done in the private manager.'}</p></div>`}</div>
    <section class="pane" style="margin:14px 0"><h2 style="font-size:18px">Current Commission Queue</h2><p class="sub">Public display names and estimated start dates only.</p><div class="mail-rows">${M.publicQueue.length ? M.publicQueue.map(x => '<div class="mrow"><span class="dot"></span><span>' + (x.avatarUrl && https(x.avatarUrl) ? '<img src="' + esc(imgOk(x.avatarUrl)) + '" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:7px">' : '') + '<span class="nm">' + esc(x.displayName) + '</span><span class="snip">' + esc(x.type) + ' · ' + esc(x.status) + '</span></span><span class="when">#' + esc(x.position) + '<br>' + esc(x.estimatedStart || 'Date not set') + '</span></div>').join('') : '<p class="sub">No public queue entries yet.</p>'}</div></section>
    <p class="public-status">${esc(statusText)}</p>
   </div>
@@ -1307,7 +1356,7 @@ function editorBuild(b){
 function filesBuild(b){
  const slot = (kind, title, accept, f, ext) => `<div class="fslot"><h4>${title}</h4><div class="fline">${f ? `<span><b>${esc(f.name)}</b> <small style="color:var(--muted)">${f.size ? kb(f.size) : ''}</small></span><button class="btn btn-danger btn-sm" type="button" data-rm="${kind}" data-fid="${esc(f.id)}">Remove</button>` : `<span style="color:var(--muted)">No ${ext} file yet</span>`}
   <label class="btn btn-plain btn-sm">${ic('plus')} ${f ? 'Replace' : 'Add'} file<input type="file" accept="${accept}" data-up="${kind}" hidden></label></div></div>`;
- return `<div class="pane"><h3>Pictures and files</h3><p class="sub">Uploads go to a folder in your Google Drive and are shared so visitors can see and download them. Files up to 20 MB.</p>
+ return `<div class="pane"><h3>Pictures and files</h3><p class="sub">Uploads are stored by the studio server and shared so visitors can see and download them. Files up to 20 MB.</p>
   <div style="display:grid;gap:12px;margin-top:14px">
    <div class="fslot"><h4>Cover picture</h4><div class="fline">${b.cover ? `<img src="${esc(imgOk(b.cover))}" alt="">` : '<span style="color:var(--muted)">No cover yet. The build stays off the website until it has one.</span>'}${b.coverFile ? `<button class="btn btn-danger btn-sm" type="button" data-rm="cover" data-fid="${esc(b.coverFile.id)}">${BUILT_IN.includes(b.id) ? 'Use original' : 'Remove'}</button>` : ''}
     <label class="btn btn-plain btn-sm">${ic('plus')} ${b.coverFile || BUILT_IN.includes(b.id) ? 'Replace' : 'Add'} cover<input type="file" accept="image/*" data-up="cover" hidden></label></div></div>

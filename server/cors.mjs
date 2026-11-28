@@ -7,7 +7,13 @@
  * one backend, so the backend has to say yes to exactly those origins.
  */
 
-const DEFAULT_ORIGINS = ['https://pinnaclebuilds1.github.io'];
+const DEFAULT_ORIGINS = [
+  'https://pinnaclebuilds1.github.io',
+  /* The two hosted copies. Same-origin requests already pass; listing them here
+     means a preview build pointed at the production API still works. */
+  'https://pinnacle-builds-vdb5vf.freebuff.site',
+  'https://pinnacle-builds-vdb5vf-preview.freebuff.site'
+];
 
 export function allowedOriginSet(config = {}) {
   const extra = String(config.allowedOrigins || '')
@@ -20,6 +26,12 @@ export function allowedOriginSet(config = {}) {
 /** { ok, origin } — ok is false for a foreign Origin header. */
 export function checkOrigin(originHeader, requestUrl, config) {
   if (!originHeader) return { ok: true, origin: '' };
+
+  /* A page opened from disk (file://) or from a sandboxed frame sends the
+     opaque origin "null". It carries no cookies, and this API authenticates
+     with explicit tokens in the request body, so such pages may read and post
+     like any other allowed page — otherwise they fail with net::ERR_FAILED. */
+  if (String(originHeader).trim() === 'null') return { ok: true, origin: 'null' };
 
   let origin = '';
   try {
